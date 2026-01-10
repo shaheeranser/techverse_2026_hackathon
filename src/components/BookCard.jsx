@@ -6,42 +6,42 @@ import {
   Typography,
   Box,
   Chip,
-  IconButton,
-  Tooltip,
   Avatar,
   Stack,
+  Tooltip,
 } from "@mui/material";
-import FavoriteIcon from "@mui/icons-material/Favorite";
-import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import InfoIcon from "@mui/icons-material/Info";
 
-const BookCard = ({
-  image = "",
-  title = "Untitled",
-  author = "Unknown",
-  owner = "Unknown",
-  condition = "Good",
-  points = 0,
-  location = "",
-  isWishlisted = false,
-  totalReaders = 0,
-  demandLevel = "medium", // low, medium, high
-  rarity = "common", // common, rare
-  status = "available", // available, pending, exchanged
-  onToggleWishlist = () => {},
-  onClick = () => {},
-}) => {
+const BookCard = ({ book, availableCount = 0, onClick = () => {} }) => {
+  const {
+    title = "Untitled",
+    author = "Unknown",
+    ownerName = "Unknown",
+    ownerPhoto = "",
+    condition = 5,
+    location = "",
+    pictures = [],
+    description = "",
+    totalReaders = 0,
+    demandLevel = "medium", // low, medium, high
+    rarity = "common", // common, rare
+    status = "available", // available, pending, exchanged
+    points = 0,
+  } = book || {};
+
   const getConditionColor = (cond) => {
     if (!cond) return "default";
-    const colors = {
-      mint: "success",
-      good: "info",
-      fair: "warning",
-      poor: "error",
-    };
+    if (typeof cond === "number") {
+      if (cond >= 8) return "success";
+      if (cond >= 5) return "info";
+      if (cond >= 3) return "warning";
+      return "error";
+    }
+    const colors = { mint: "success", good: "info", fair: "warning", poor: "error" };
     return colors[String(cond).toLowerCase()] || "default";
   };
 
@@ -69,7 +69,7 @@ const BookCard = ({
         <CardMedia
           component="img"
           height="360"
-          image={image || ""}
+          image={pictures?.[0] || ""}
           alt={title}
           sx={{ objectFit: "cover" }}
         />
@@ -90,36 +90,9 @@ const BookCard = ({
             label="Rare"
             color="secondary"
             size="small"
-            sx={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              fontWeight: "bold",
-            }}
+            sx={{ position: "absolute", top: 12, right: 12, fontWeight: "bold" }}
           />
         )}
-
-        {/* Wishlist */}
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleWishlist();
-          }}
-          sx={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            bgcolor: "rgba(255,255,255,0.9)",
-            "&:hover": { bgcolor: "rgba(255,255,255,1)" },
-          }}
-          size="small"
-        >
-          {isWishlisted ? (
-            <FavoriteIcon color="error" fontSize="small" />
-          ) : (
-            <FavoriteBorderIcon fontSize="small" />
-          )}
-        </IconButton>
 
         {/* Points */}
         <Box
@@ -139,10 +112,7 @@ const BookCard = ({
           <Typography variant="h6" fontWeight="bold">
             {points}
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{ display: "block", lineHeight: 1 }}
-          >
+          <Typography variant="caption" sx={{ display: "block", lineHeight: 1 }}>
             points
           </Typography>
         </Box>
@@ -157,24 +127,20 @@ const BookCard = ({
         </Tooltip>
 
         {author && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            noWrap
-            sx={{ mb: 1.5 }}
-          >
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ mb: 1.5 }}>
             by {author}
           </Typography>
         )}
 
         {/* Condition & Demand */}
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: "wrap" }}>
           <Chip
-            label={condition}
+            label={`Condition: ${condition}`}
             size="small"
             color={getConditionColor(condition)}
             sx={{ fontWeight: "medium", textTransform: "capitalize" }}
           />
+          <Chip label={`Available: ${availableCount}`} size="small" variant="outlined" />
           {demandLevel === "high" && (
             <Chip
               icon={<TrendingUpIcon sx={{ fontSize: 16 }} />}
@@ -198,11 +164,11 @@ const BookCard = ({
 
         {/* Owner */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-          <Avatar sx={{ width: 24, height: 24, bgcolor: "primary.light" }}>
-            <AccountCircleIcon sx={{ fontSize: 16 }} />
+          <Avatar sx={{ width: 24, height: 24 }} src={ownerPhoto}>
+            {!ownerPhoto && <AccountCircleIcon sx={{ fontSize: 16 }} />}
           </Avatar>
           <Typography variant="caption" color="text.secondary" noWrap>
-            {owner}
+            {ownerName}
           </Typography>
         </Box>
 
@@ -214,6 +180,13 @@ const BookCard = ({
               {location}
             </Typography>
           </Box>
+        )}
+
+        {/* Description Tooltip */}
+        {description && (
+          <Tooltip title={description}>
+            <InfoIcon color="action" fontSize="small" sx={{ mt: 1 }} />
+          </Tooltip>
         )}
       </CardContent>
     </Card>

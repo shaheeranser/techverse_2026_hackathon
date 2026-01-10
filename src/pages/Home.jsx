@@ -102,10 +102,7 @@ const Home = () => {
             <Grid item key={book.id}>
               <BookCard
                 onClick={() => navigate(`/book/${book.id}`)}
-                title={book.title}
-                owner={book.ownerName}
-                condition={book.condition}
-                image={book.pictures?.[0]} // first picture
+                book={book}
               />
             </Grid>
           ))
