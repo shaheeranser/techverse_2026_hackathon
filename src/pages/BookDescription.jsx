@@ -67,182 +67,122 @@ const BookDescription = () => {
           name: userData.name,
         });
 
-        // Fetch book
         const bookRef = doc(db, "books", bookId);
         const bookSnap = await getDoc(bookRef);
         if (!bookSnap.exists()) {
           setError("Book not found");
-          setBook(null);
-          setExchangeHistory([]);
           setLoading(false);
           return;
         }
 
-        const bookData = { id: bookSnap.id, ...bookSnap.data() };
-        setBook(bookData);
+        setBook({ id: bookSnap.id, ...bookSnap.data() });
 
-        // Fetch exchange history
-        const historyRef = collection(db, "books", bookId, "exchangeHistory");
-        const historySnap = await getDocs(historyRef);
-        const historyData = historySnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setExchangeHistory(historyData);
+        const historySnap = await getDocs(
+          collection(db, "books", bookId, "exchangeHistory")
+        );
+        setExchangeHistory(
+          historySnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        );
       } catch (err) {
-        console.error(err);
-        setError(err.message || "Failed to load book data");
+        setError(err.message || "Failed to load data");
       }
       setLoading(false);
     };
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        fetchBookAndUser(user);
-      } else {
-        setError("User not logged in");
-        setLoading(false);
-      }
+    const unsub = onAuthStateChanged(auth, (user) => {
+      user ? fetchBookAndUser(user) : setError("Not logged in");
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, [bookId]);
 
-  const handleTabChange = (event, newValue) => setTab(newValue);
-
-  const openLightbox = (image) => {
-    setLightboxImage(image);
-    setLightboxOpen(true);
-  };
-  const closeLightbox = () => setLightboxOpen(false);
-
-  const openSwapModal = () => setSwapModalOpen(true);
-  const closeSwapModal = () => setSwapModalOpen(false);
-
-  const handleSwapConfirm = async () => {
-    if (!auth.currentUser || !book) return;
-
-    try {
-      const currentUserId = auth.currentUser.uid;
-      const ownerId = book.ownerId;
-      const cost = book.points || 0;
-
-      // Transaction: deduct points from current user and add to owner
-      await runTransaction(db, async (transaction) => {
-        const userRef = doc(db, "users", currentUserId);
-        const ownerRef = doc(db, "users", ownerId);
-
-        const userSnap = await transaction.get(userRef);
-        const ownerSnap = await transaction.get(ownerRef);
-
-        if (!userSnap.exists() || !ownerSnap.exists()) {
-          throw new Error("User or book owner not found");
-        }
-
-        const userPoints = userSnap.data().points || 0;
-        const ownerPoints = ownerSnap.data().points || 0;
-
-        if (userPoints < cost) {
-          throw new Error("You don't have enough points to swap this book");
-        }
-
-        transaction.update(userRef, { points: userPoints - cost });
-        transaction.update(ownerRef, { points: ownerPoints + cost });
-      });
-
-      // Record the swap in exchange history
-      const historyRef = collection(db, "books", book.id, "exchangeHistory");
-      await addDoc(historyRef, {
-        reader: auth.currentUser.displayName || "User",
-        readerId: currentUserId,
-        location: book.location,
-        note: "Book swapped",
-        rating: 0,
-        timestamp: serverTimestamp(),
-      });
-
-      // Add book to receivedBooks
-      const receivedRef = collection(db, "users", currentUserId, "receivedBooks");
-      await addDoc(receivedRef, {
-        bookId: book.id,
-        title: book.title,
-        author: book.author,
-        pictures: book.pictures,
-        location: book.location,
-        points: book.points,
-        ownerName: book.ownerName,
-        ownerId: book.ownerId,
-        timestamp: serverTimestamp(),
-      });
-
-      // Update current user points in UI
-      setCurrentUser((prev) => ({ ...prev, points: prev.points - cost }));
-
-      alert("Swap successful!");
-      closeSwapModal();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Swap failed");
-      closeSwapModal();
-    }
-  };
-
   if (loading)
-    return <Typography sx={{ textAlign: "center", mt: 5 }}>Loading...</Typography>;
+    return <Typography sx={{ mt: 5, textAlign: "center" }}>Loading…</Typography>;
   if (error)
     return (
-      <Typography sx={{ textAlign: "center", mt: 5, color: "red" }}>{error}</Typography>
+      <Typography sx={{ mt: 5, textAlign: "center", color: "error.main" }}>
+        {error}
+      </Typography>
     );
-  if (!book) return null;
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, maxWidth: 1400, margin: "0 auto" }}>
-      <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 3 }}>
+    <Box sx={{ maxWidth: 1400, mx: "auto", p: { xs: 2, md: 4 } }}>
+      <Breadcrumbs sx={{ mb: 3 }}>
         <Link to="/" style={{ textDecoration: "none", color: "inherit" }}>
           Home
         </Link>
-        <Typography color="text.primary">{book.title || "Book"}</Typography>
+        <Typography>{book.title}</Typography>
       </Breadcrumbs>
 
       <Grid container spacing={4}>
-        {/* Left Column */}
-        <Grid item xs={12} md={4} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Card sx={{ borderRadius: 3, flex: 1, overflow: "hidden" }}>
+        {/* LEFT — 1/3 */}
+        <Grid
+          item
+          xs={12}
+          md={4}
+          sx={{
+            flexBasis: "33.333%",
+            maxWidth: "33.333%",
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <Card sx={{ borderRadius: 3, overflow: "hidden" }}>
             <CardMedia
               component="img"
-              image={book.pictures?.[0] || ""}
+              image={book.pictures?.[0]}
               alt={book.title}
-              sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+              sx={{
+                width: "100%",
+                height: 420,
+                objectFit: "cover",
+              }}
             />
           </Card>
 
           <Paper sx={{ p: 3, borderRadius: 3 }}>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary">
               Book Owner
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-              <Avatar sx={{ mr: 2 }} src={book.ownerPhoto}>
+
+            <Stack direction="row" spacing={2} sx={{ my: 2 }}>
+              <Avatar src={book.ownerPhoto}>
                 <AccountIcon />
               </Avatar>
               <Box>
-                <Typography variant="body1">{book.ownerName}</Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography>{book.ownerName}</Typography>
+                <Stack direction="row" spacing={0.5} alignItems="center">
                   <StarIcon sx={{ fontSize: 16, color: "warning.main" }} />
-                  <Typography variant="caption">4.8 rating</Typography>
-                </Box>
+                  <Typography variant="caption">4.8</Typography>
+                </Stack>
               </Box>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", color: "text.secondary", mb: 1 }}>
-              <LocationIcon sx={{ fontSize: 18, mr: 1 }} />
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+              <LocationIcon fontSize="small" />
               <Typography variant="body2">{book.location}</Typography>
-            </Box>
-            <Button variant="outlined" fullWidth size="small" onClick={openSwapModal}>
+            </Stack>
+
+            <Button fullWidth variant="outlined" onClick={() => setSwapModalOpen(true)}>
               Swap for {book.points || 0} pts
             </Button>
           </Paper>
         </Grid>
 
-        {/* Right Column */}
-        <Grid item xs={12} md={8} sx={{ flexGrow: 1 }}>
+        {/* RIGHT — 2/3 */}
+        <Grid
+          item
+          xs={12}
+          md={8}
+          sx={{
+            flexBasis: "66.666%",
+            maxWidth: "66.666%",
+          }}
+        >
           <Paper sx={{ borderRadius: 3 }}>
-            <Tabs value={tab} onChange={handleTabChange} indicatorColor="primary" textColor="primary" variant="fullWidth">
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth">
               <Tab label="Details" />
               <Tab label="Reading Journey" />
               <Tab label="Exchange Points" />
@@ -250,47 +190,44 @@ const BookDescription = () => {
 
             <Box sx={{ p: 3 }}>
               {tab === 0 && (
-                <Box>
-                  <Typography variant="h4" gutterBottom>
-                    {book.title}
-                  </Typography>
-                  <Typography variant="h6" color="text.secondary">
-                    {book.author}
-                  </Typography>
+                <>
+                  <Typography variant="h4">{book.title}</Typography>
+                  <Typography color="text.secondary">{book.author}</Typography>
                   <Divider sx={{ my: 3 }} />
-                  <Typography variant="body1">{book.description}</Typography>
+                  <Typography>{book.description}</Typography>
 
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Additional Photos
-                    </Typography>
-                    <Grid container spacing={2}>
-                      {book.pictures?.map((p, i) => (
-                        <Grid item xs={6} sm={4} key={i}>
-                          <Card sx={{ cursor: "pointer", borderRadius: 2, overflow: "hidden" }} onClick={() => openLightbox(p)}>
-                            <CardMedia component="img" image={p} alt={`Photo ${i + 1}`} sx={{ width: "100%", height: 150, objectFit: "cover" }} />
-                          </Card>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                </Box>
+                  <Grid container spacing={2} sx={{ mt: 3 }}>
+                    {book.pictures?.map((img, i) => (
+                      <Grid item xs={6} sm={4} key={i}>
+                        <Card
+                          onClick={() => {
+                            setLightboxImage(img);
+                            setLightboxOpen(true);
+                          }}
+                          sx={{ cursor: "pointer" }}
+                        >
+                          <CardMedia
+                            component="img"
+                            image={img}
+                            sx={{ height: 150, objectFit: "cover" }}
+                          />
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </>
               )}
+
               {tab === 1 && (
                 <Stack spacing={2}>
-                  {exchangeHistory.length === 0 && <Typography>No reading history yet.</Typography>}
-                  {exchangeHistory.map((entry, i) => (
-                    <Paper key={i} sx={{ p: 2 }}>
-                      <Typography variant="subtitle2">{entry.reader}</Typography>
-                      <Typography variant="caption">{entry.location}</Typography>
-                      <Box sx={{ display: "flex", mt: 1 }}>
-                        {[...Array(5)].map((_, idx) => (
-                          <StarIcon key={idx} sx={{ fontSize: 16, color: idx < (entry.rating || 0) ? "warning.main" : "grey.300" }} />
-                        ))}
-                      </Box>
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: "italic" }}>
-                        {entry.note}
-                      </Typography>
+                  {exchangeHistory.length === 0 && (
+                    <Typography>No reading history yet.</Typography>
+                  )}
+                  {exchangeHistory.map((e) => (
+                    <Paper key={e.id} sx={{ p: 2 }}>
+                      <Typography fontWeight={500}>{e.reader}</Typography>
+                      <Typography variant="caption">{e.location}</Typography>
+                      <Typography sx={{ mt: 1 }}>{e.note}</Typography>
                     </Paper>
                   ))}
                 </Stack>
@@ -300,35 +237,25 @@ const BookDescription = () => {
         </Grid>
       </Grid>
 
-      {/* Lightbox Modal */}
-      <Modal open={lightboxOpen} onClose={closeLightbox}>
-        <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", maxWidth: "90%", maxHeight: "90%", outline: "none" }}>
-          <Card sx={{ position: "relative" }}>
-            <IconButton sx={{ position: "absolute", top: 8, right: 8, color: "white", zIndex: 1 }} onClick={closeLightbox}>
-              <CloseIcon />
-            </IconButton>
-            <CardMedia component="img" src={lightboxImage} alt="Book" sx={{ width: "100%", maxHeight: "90vh", objectFit: "contain" }} />
-          </Card>
-        </Box>
-      </Modal>
-
-      {/* Swap Modal */}
-      <Modal open={swapModalOpen} onClose={closeSwapModal}>
-        <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", bgcolor: "background.paper", borderRadius: 2, boxShadow: 24, p: 4, width: { xs: "90%", sm: 400 } }}>
-          <Typography variant="h6" gutterBottom>
-            Confirm Swap
-          </Typography>
-          <Typography sx={{ mb: 3 }}>
-            Are you sure you want to swap this book for <strong>{book?.points || 0} points</strong>?
-          </Typography>
-          <Stack direction="row" spacing={2} justifyContent="flex-end">
-            <Button variant="outlined" onClick={closeSwapModal}>
-              Cancel
-            </Button>
-            <Button variant="contained" onClick={handleSwapConfirm}>
-              Confirm
-            </Button>
-          </Stack>
+      {/* LIGHTBOX */}
+      <Modal open={lightboxOpen} onClose={() => setLightboxOpen(false)}>
+        <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(0,0,0,0.9)" }}>
+          <IconButton
+            onClick={() => setLightboxOpen(false)}
+            sx={{ position: "absolute", top: 16, right: 16, color: "white" }}
+          >
+            <CloseIcon />
+          </IconButton>
+          <CardMedia
+            component="img"
+            image={lightboxImage}
+            sx={{
+              maxHeight: "90vh",
+              maxWidth: "90vw",
+              objectFit: "contain",
+              m: "auto",
+            }}
+          />
         </Box>
       </Modal>
     </Box>

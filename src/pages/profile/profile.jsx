@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { auth, db, storage } from "../../firebase";
 import {
   doc,
@@ -56,6 +57,41 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
 
   const [availableMap, setAvailableMap] = useState({});
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      // const loggedIn = localStorage.getItem("loggedIn") === "true";
+
+      if (!user) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const snap = await getDoc(userRef);
+
+        if (snap.exists()) {
+          let data = snap.data();
+          if (data.points === undefined) {
+            await updateDoc(userRef, { points: 250 });
+            data.points = 250;
+          }
+          setUserData(data);
+        }
+
+        await fetchMyBooks(user.uid);
+        await fetchReceivedBooks(user.uid);
+      } catch (err) {
+        console.error(err);
+        navigate("/", { replace: true });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
 
   // Fetch user and books data
   useEffect(() => {

@@ -21,6 +21,8 @@ import {
   Paper,
   Alert,
   CircularProgress,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   Notifications as NotificationsIcon,
@@ -28,6 +30,9 @@ import {
   SwapHoriz as SwapIcon,
   CheckCircle as AcceptIcon,
   Cancel as RejectIcon,
+  ShoppingCart as OrderIcon,
+  Send as SentIcon,
+  Inbox as ReceivedIcon,
 } from "@mui/icons-material";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { auth, provider, db } from "../firebase";
@@ -42,13 +47,16 @@ import {
   where,
   onSnapshot,
   updateDoc,
+  or,
 } from "firebase/firestore";
 
 export default function Navbar() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [user, setUser] = useState(null);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [activeTab, setActiveTab] = useState(0); // 0 = Requests, 1 = My Orders
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [myOrders, setMyOrders] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -62,19 +70,17 @@ export default function Navbar() {
     return unsubscribe;
   }, []);
 
-  // Listen for exchange requests (notifications) in real-time
+  // Listen for INCOMING exchange requests (where user is the giver)
   useEffect(() => {
     if (!user) {
-      setNotifications([]);
-      setUnreadCount(0);
+      setIncomingRequests([]);
       return;
     }
 
-    // Query for exchanges where user is the giver (incoming requests)
     const q = query(
       collection(db, "exchanges"),
       where("giverId", "==", user.uid),
-      where("status", "in", ["pending", "accepted"])
+      where("status", "in", ["pending", "accepted", "completed"])
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -100,20 +106,82 @@ export default function Navbar() {
 
         return {
           id: exchangeDoc.id,
+          type: "incoming",
           ...exchangeData,
           receiverName: receiverData.name || receiverData.displayName || "Anonymous",
           receiverPhoto: receiverData.photo || receiverData.photoURL,
           bookTitle,
           bookImage: listingData.photos?.[0],
+          createdAt: exchangeData.requestedAt?.toDate?.() || new Date(),
         };
       });
 
       const exchangesData = await Promise.all(exchangePromises);
-      setNotifications(exchangesData);
+      
+      // Sort by date (newest first)
+      exchangesData.sort((a, b) => b.createdAt - a.createdAt);
+      
+      setIncomingRequests(exchangesData);
       
       // Count unread (pending status)
       const unread = exchangesData.filter(n => n.status === "pending").length;
       setUnreadCount(unread);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Listen for MY ORDERS (where user is the receiver - books they requested)
+  useEffect(() => {
+    if (!user) {
+      setMyOrders([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, "exchanges"),
+      where("receiverId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const orderPromises = snapshot.docs.map(async (exchangeDoc) => {
+        const exchangeData = exchangeDoc.data();
+        
+        // Fetch giver (book owner) info
+        const giverDoc = await getDoc(doc(db, "users", exchangeData.giverId));
+        const giverData = giverDoc.exists() ? giverDoc.data() : {};
+
+        // Fetch book info
+        const listingDoc = await getDoc(doc(db, "book_listings", exchangeData.listingId));
+        const listingData = listingDoc.exists() ? listingDoc.data() : {};
+
+        // Fetch catalog info for book title
+        let bookTitle = "Unknown Book";
+        if (listingData.catalogId) {
+          const catalogDoc = await getDoc(doc(db, "books_catalog", listingData.catalogId));
+          if (catalogDoc.exists()) {
+            bookTitle = catalogDoc.data().title;
+          }
+        }
+
+        return {
+          id: exchangeDoc.id,
+          type: "outgoing",
+          ...exchangeData,
+          giverName: giverData.name || giverData.displayName || "Anonymous",
+          giverPhoto: giverData.photo || giverData.photoURL,
+          bookTitle,
+          bookImage: listingData.photos?.[0],
+          createdAt: exchangeData.requestedAt?.toDate?.() || new Date(),
+        };
+      });
+
+      const ordersData = await Promise.all(orderPromises);
+      
+      // Sort by date (newest first)
+      ordersData.sort((a, b) => b.createdAt - a.createdAt);
+      
+      setMyOrders(ordersData);
     });
 
     return () => unsubscribe();
@@ -129,7 +197,6 @@ export default function Navbar() {
       const snap = await getDoc(userRef);
 
       if (!snap.exists()) {
-        // First login: create user with 250 points
         await setDoc(userRef, {
           name: loggedUser.displayName,
           email: loggedUser.email,
@@ -161,7 +228,6 @@ export default function Navbar() {
         acceptedAt: serverTimestamp(),
       });
 
-      // Cloud Function will handle point transfer automatically
       alert("Exchange accepted! Points will be transferred.");
     } catch (err) {
       console.error("Error accepting exchange:", err);
@@ -172,7 +238,7 @@ export default function Navbar() {
   };
 
   // Handle reject exchange request
-  const handleRejectExchange = async (exchangeId) => {
+  const handleRejectExchange = async (exchangeId, listingId) => {
     try {
       setLoading(true);
       const exchangeRef = doc(db, "exchanges", exchangeId);
@@ -183,10 +249,7 @@ export default function Navbar() {
       });
 
       // Update book listing status back to available
-      const exchangeDoc = await getDoc(exchangeRef);
-      const exchangeData = exchangeDoc.data();
-      
-      const listingRef = doc(db, "book_listings", exchangeData.listingId);
+      const listingRef = doc(db, "book_listings", listingId);
       await updateDoc(listingRef, {
         status: "available",
       });
@@ -200,7 +263,44 @@ export default function Navbar() {
     }
   };
 
-  // Popover for avatar
+  // Handle confirm receipt (for receiver)
+  const handleConfirmReceipt = async (exchangeId) => {
+    try {
+      setLoading(true);
+      const exchangeRef = doc(db, "exchanges", exchangeId);
+      
+      await updateDoc(exchangeRef, {
+        receiverConfirmed: true,
+      });
+
+      alert("Receipt confirmed! Waiting for owner to confirm.");
+    } catch (err) {
+      console.error("Error confirming receipt:", err);
+      alert("Failed to confirm receipt. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle confirm sent (for giver)
+  const handleConfirmSent = async (exchangeId) => {
+    try {
+      setLoading(true);
+      const exchangeRef = doc(db, "exchanges", exchangeId);
+      
+      await updateDoc(exchangeRef, {
+        giverConfirmed: true,
+      });
+
+      alert("Confirmed! Waiting for receiver to confirm receipt.");
+    } catch (err) {
+      console.error("Error confirming sent:", err);
+      alert("Failed to confirm. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleProfileClick = (event) => setAnchorEl(event.currentTarget);
   const handlePopoverClose = () => setAnchorEl(null);
   const handleGoToProfile = () => {
@@ -214,6 +314,28 @@ export default function Navbar() {
   };
 
   const open = Boolean(anchorEl);
+
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: "warning",
+      accepted: "info",
+      completed: "success",
+      rejected: "error",
+      cancelled: "default",
+    };
+    return colors[status] || "default";
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      pending: "Pending",
+      accepted: "Accepted",
+      completed: "Completed",
+      rejected: "Rejected",
+      cancelled: "Cancelled",
+    };
+    return labels[status] || status;
+  };
 
   return (
     <>
@@ -307,19 +429,37 @@ export default function Navbar() {
         open={notificationDrawerOpen}
         onClose={() => setNotificationDrawerOpen(false)}
         PaperProps={{
-          sx: { width: { xs: "100%", sm: 400 } }
+          sx: { width: { xs: "100%", sm: 450 } }
         }}
       >
+        {/* Header */}
         <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="h6" fontWeight="bold">
-            Exchange Requests
+            Exchanges & Orders
           </Typography>
           <IconButton onClick={() => setNotificationDrawerOpen(false)}>
             <CloseIcon />
           </IconButton>
         </Box>
         
-        <Divider />
+        {/* Tabs */}
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, val) => setActiveTab(val)}
+          variant="fullWidth"
+          sx={{ borderBottom: 1, borderColor: "divider" }}
+        >
+          <Tab 
+            icon={<ReceivedIcon />} 
+            iconPosition="start" 
+            label={`Requests (${incomingRequests.length})`} 
+          />
+          <Tab 
+            icon={<SentIcon />} 
+            iconPosition="start" 
+            label={`My Orders (${myOrders.length})`} 
+          />
+        </Tabs>
 
         {loading && (
           <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
@@ -327,121 +467,264 @@ export default function Navbar() {
           </Box>
         )}
 
-        {!loading && notifications.length === 0 && (
-          <Box sx={{ p: 3, textAlign: "center" }}>
-            <NotificationsIcon sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
-              No exchange requests yet
-            </Typography>
+        {/* Tab Panel 0: Incoming Requests */}
+        {activeTab === 0 && (
+          <Box>
+            {!loading && incomingRequests.length === 0 && (
+              <Box sx={{ p: 3, textAlign: "center" }}>
+                <ReceivedIcon sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
+                <Typography variant="body2" color="text.secondary">
+                  No exchange requests yet
+                </Typography>
+              </Box>
+            )}
+
+            <List sx={{ p: 0 }}>
+              {incomingRequests.map((request) => (
+                <Paper 
+                  key={request.id}
+                  elevation={0}
+                  sx={{ 
+                    m: 2, 
+                    p: 2, 
+                    borderRadius: 2,
+                    border: 1,
+                    borderColor: request.status === "pending" ? "primary.main" : "divider",
+                    bgcolor: request.status === "pending" ? "primary.lighter" : "background.paper",
+                  }}
+                >
+                  {/* Request Header */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                    <Avatar src={request.receiverPhoto} alt={request.receiverName} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight="medium">
+                        {request.receiverName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        wants your book
+                      </Typography>
+                    </Box>
+                    <Chip 
+                      label={getStatusLabel(request.status)} 
+                      size="small"
+                      color={getStatusColor(request.status)}
+                      sx={{ textTransform: "capitalize" }}
+                    />
+                  </Box>
+
+                  {/* Book Info */}
+                  <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+                    {request.bookImage && (
+                      <Box
+                        component="img"
+                        src={request.bookImage}
+                        alt={request.bookTitle}
+                        sx={{ width: 60, height: 80, objectFit: "cover", borderRadius: 1 }}
+                      />
+                    )}
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" gutterBottom>
+                        {request.bookTitle}
+                      </Typography>
+                      <Chip 
+                        icon={<SwapIcon />}
+                        label={`${request.pointsTransferred} points`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                  </Box>
+
+                  {/* Message */}
+                  {request.messageToOwner && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <Typography variant="caption">
+                        "{request.messageToOwner}"
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {/* Action Buttons */}
+                  {request.status === "pending" && (
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        size="small"
+                        startIcon={<AcceptIcon />}
+                        onClick={() => handleAcceptExchange(request.id)}
+                        fullWidth
+                        disabled={loading}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        startIcon={<RejectIcon />}
+                        onClick={() => handleRejectExchange(request.id, request.listingId)}
+                        fullWidth
+                        disabled={loading}
+                      >
+                        Reject
+                      </Button>
+                    </Stack>
+                  )}
+
+                  {request.status === "accepted" && !request.giverConfirmed && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<AcceptIcon />}
+                      onClick={() => handleConfirmSent(request.id)}
+                      fullWidth
+                      disabled={loading}
+                    >
+                      Confirm Book Sent
+                    </Button>
+                  )}
+
+                  {request.status === "accepted" && request.giverConfirmed && (
+                    <Alert severity="info">
+                      <Typography variant="caption">
+                        Waiting for {request.receiverName} to confirm receipt
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {request.status === "completed" && (
+                    <Alert severity="success">
+                      <Typography variant="caption">
+                        ✓ Exchange completed with {request.receiverName}
+                      </Typography>
+                    </Alert>
+                  )}
+                </Paper>
+              ))}
+            </List>
           </Box>
         )}
 
-        <List sx={{ p: 0 }}>
-          {notifications.map((notification) => (
-            <React.Fragment key={notification.id}>
-              <Paper 
-                elevation={0}
-                sx={{ 
-                  m: 2, 
-                  p: 2, 
-                  borderRadius: 2,
-                  border: 1,
-                  borderColor: notification.status === "pending" ? "primary.main" : "divider",
-                  bgcolor: notification.status === "pending" ? "primary.lighter" : "background.paper",
-                }}
-              >
-                {/* Request Header */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-                  <Avatar src={notification.receiverPhoto} alt={notification.receiverName} />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle2" fontWeight="medium">
-                      {notification.receiverName}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {notification.status === "pending" ? "Requesting your book" : "Request accepted"}
-                    </Typography>
-                  </Box>
-                  <Chip 
-                    label={notification.status} 
-                    size="small"
-                    color={notification.status === "pending" ? "warning" : "success"}
-                    sx={{ textTransform: "capitalize" }}
-                  />
-                </Box>
+        {/* Tab Panel 1: My Orders */}
+        {activeTab === 1 && (
+          <Box>
+            {!loading && myOrders.length === 0 && (
+              <Box sx={{ p: 3, textAlign: "center" }}>
+                <SentIcon sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
+                <Typography variant="body2" color="text.secondary">
+                  You haven't requested any books yet
+                </Typography>
+              </Box>
+            )}
 
-                {/* Book Info */}
-                <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-                  {notification.bookImage && (
-                    <Box
-                      component="img"
-                      src={notification.bookImage}
-                      alt={notification.bookTitle}
-                      sx={{ width: 60, height: 80, objectFit: "cover", borderRadius: 1 }}
-                    />
-                  )}
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="body2" fontWeight="medium" gutterBottom>
-                      {notification.bookTitle}
-                    </Typography>
+            <List sx={{ p: 0 }}>
+              {myOrders.map((order) => (
+                <Paper 
+                  key={order.id}
+                  elevation={0}
+                  sx={{ 
+                    m: 2, 
+                    p: 2, 
+                    borderRadius: 2,
+                    border: 1,
+                    borderColor: "divider",
+                  }}
+                >
+                  {/* Order Header */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                    <Avatar src={order.giverPhoto} alt={order.giverName} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight="medium">
+                        Book from {order.giverName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {order.createdAt.toLocaleDateString()}
+                      </Typography>
+                    </Box>
                     <Chip 
-                      icon={<SwapIcon />}
-                      label={`${notification.pointsTransferred} points`}
+                      label={getStatusLabel(order.status)} 
                       size="small"
-                      color="primary"
-                      variant="outlined"
+                      color={getStatusColor(order.status)}
+                      sx={{ textTransform: "capitalize" }}
                     />
                   </Box>
-                </Box>
 
-                {/* Message */}
-                {notification.messageToOwner && (
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    <Typography variant="caption">
-                      "{notification.messageToOwner}"
-                    </Typography>
-                  </Alert>
-                )}
+                  {/* Book Info */}
+                  <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+                    {order.bookImage && (
+                      <Box
+                        component="img"
+                        src={order.bookImage}
+                        alt={order.bookTitle}
+                        sx={{ width: 60, height: 80, objectFit: "cover", borderRadius: 1 }}
+                      />
+                    )}
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" gutterBottom>
+                        {order.bookTitle}
+                      </Typography>
+                      <Chip 
+                        icon={<SwapIcon />}
+                        label={`${order.pointsTransferred} points`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                  </Box>
 
-                {/* Action Buttons - Only show for pending requests */}
-                {notification.status === "pending" && (
-                  <Stack direction="row" spacing={1}>
+                  {/* Status Messages */}
+                  {order.status === "pending" && (
+                    <Alert severity="info">
+                      <Typography variant="caption">
+                        Waiting for {order.giverName} to respond
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {order.status === "accepted" && !order.receiverConfirmed && (
                     <Button
                       variant="contained"
-                      color="success"
                       size="small"
                       startIcon={<AcceptIcon />}
-                      onClick={() => handleAcceptExchange(notification.id)}
+                      onClick={() => handleConfirmReceipt(order.id)}
                       fullWidth
                       disabled={loading}
                     >
-                      Accept
+                      Confirm Book Received
                     </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      startIcon={<RejectIcon />}
-                      onClick={() => handleRejectExchange(notification.id)}
-                      fullWidth
-                      disabled={loading}
-                    >
-                      Reject
-                    </Button>
-                  </Stack>
-                )}
+                  )}
 
-                {/* Status message for accepted */}
-                {notification.status === "accepted" && (
-                  <Alert severity="success" sx={{ mt: 1 }}>
-                    <Typography variant="caption">
-                      You accepted this request. Coordinate with {notification.receiverName} to exchange the book.
-                    </Typography>
-                  </Alert>
-                )}
-              </Paper>
-            </React.Fragment>
-          ))}
-        </List>
+                  {order.status === "accepted" && order.receiverConfirmed && !order.giverConfirmed && (
+                    <Alert severity="info">
+                      <Typography variant="caption">
+                        Waiting for {order.giverName} to confirm
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {order.status === "completed" && (
+                    <Alert severity="success">
+                      <Typography variant="caption">
+                        ✓ Book received! Enjoy your reading
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {order.status === "rejected" && (
+                    <Alert severity="error">
+                      <Typography variant="caption">
+                        Request was declined by {order.giverName}
+                      </Typography>
+                    </Alert>
+                  )}
+                </Paper>
+              ))}
+            </List>
+          </Box>
+        )}
       </Drawer>
     </>
   );
