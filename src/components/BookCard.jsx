@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Card,
   CardMedia,
@@ -18,37 +19,34 @@ import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 
 const BookCard = ({
-  image,
-  title,
-  author,
-  owner,
-  condition,
-  points,
-  location,
+  image = "",
+  title = "Untitled",
+  author = "Unknown",
+  owner = "Unknown",
+  condition = "Good",
+  points = 0,
+  location = "",
   isWishlisted = false,
   totalReaders = 0,
   demandLevel = "medium", // low, medium, high
   rarity = "common", // common, rare
   status = "available", // available, pending, exchanged
-  onToggleWishlist,
-  onClick,
+  onToggleWishlist = () => {},
+  onClick = () => {},
 }) => {
-  const getConditionColor = (condition) => {
+  const getConditionColor = (cond) => {
+    if (!cond) return "default";
     const colors = {
       mint: "success",
       good: "info",
       fair: "warning",
       poor: "error",
     };
-    return colors[condition?.toLowerCase()] || "default";
+    return colors[String(cond).toLowerCase()] || "default";
   };
 
   const getDemandColor = (level) => {
-    const colors = {
-      low: "default",
-      medium: "warning",
-      high: "error",
-    };
+    const colors = { low: "default", medium: "warning", high: "error" };
     return colors[level] || "default";
   };
 
@@ -62,41 +60,31 @@ const BookCard = ({
         position: "relative",
         transition: "transform 0.2s ease, box-shadow 0.2s ease",
         cursor: "pointer",
-        "&:hover": {
-          transform: "translateY(-8px)",
-          boxShadow: 8,
-        },
+        "&:hover": { transform: "translateY(-8px)", boxShadow: 8 },
         opacity: status === "available" ? 1 : 0.7,
       }}
     >
-      {/* Book Image with Overlay */}
+      {/* Image */}
       <Box sx={{ position: "relative" }}>
         <CardMedia
           component="img"
           height="360"
-          image={image}
+          image={image || ""}
           alt={title}
-          sx={{
-            objectFit: "cover",
-          }}
+          sx={{ objectFit: "cover" }}
         />
 
-        {/* Status Badge */}
+        {/* Status */}
         {status !== "available" && (
           <Chip
             label={status === "pending" ? "Pending" : "Exchanged"}
             color="warning"
             size="small"
-            sx={{
-              position: "absolute",
-              top: 12,
-              left: 12,
-              fontWeight: "bold",
-            }}
+            sx={{ position: "absolute", top: 12, left: 12, fontWeight: "bold" }}
           />
         )}
 
-        {/* Rarity Badge */}
+        {/* Rarity */}
         {rarity === "rare" && (
           <Chip
             label="Rare"
@@ -105,26 +93,24 @@ const BookCard = ({
             sx={{
               position: "absolute",
               top: 12,
-              right: 52,
+              right: 12,
               fontWeight: "bold",
             }}
           />
         )}
 
-        {/* Wishlist Button */}
+        {/* Wishlist */}
         <IconButton
           onClick={(e) => {
             e.stopPropagation();
-            if (onToggleWishlist) onToggleWishlist();
+            onToggleWishlist();
           }}
           sx={{
             position: "absolute",
             top: 8,
             right: 8,
-            bgcolor: "rgba(255, 255, 255, 0.9)",
-            "&:hover": {
-              bgcolor: "rgba(255, 255, 255, 1)",
-            },
+            bgcolor: "rgba(255,255,255,0.9)",
+            "&:hover": { bgcolor: "rgba(255,255,255,1)" },
           }}
           size="small"
         >
@@ -135,7 +121,7 @@ const BookCard = ({
           )}
         </IconButton>
 
-        {/* Points Badge */}
+        {/* Points */}
         <Box
           sx={{
             position: "absolute",
@@ -147,32 +133,41 @@ const BookCard = ({
             py: 0.5,
             borderRadius: 2,
             fontWeight: "bold",
+            textAlign: "center",
           }}
         >
           <Typography variant="h6" fontWeight="bold">
             {points}
           </Typography>
-          <Typography variant="caption" sx={{ display: "block", lineHeight: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{ display: "block", lineHeight: 1 }}
+          >
             points
           </Typography>
         </Box>
       </Box>
 
+      {/* Content */}
       <CardContent sx={{ pb: 2 }}>
-        {/* Title and Author */}
         <Tooltip title={title}>
           <Typography variant="h6" fontWeight={600} noWrap sx={{ mb: 0.5 }}>
             {title}
           </Typography>
         </Tooltip>
-        
+
         {author && (
-          <Typography variant="body2" color="text.secondary" noWrap sx={{ mb: 1.5 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            noWrap
+            sx={{ mb: 1.5 }}
+          >
             by {author}
           </Typography>
         )}
 
-        {/* Condition & Demand Chips */}
+        {/* Condition & Demand */}
         <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
           <Chip
             label={condition}
@@ -191,7 +186,7 @@ const BookCard = ({
           )}
         </Stack>
 
-        {/* Reading History */}
+        {/* Total Readers */}
         {totalReaders > 0 && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
             <AutoStoriesIcon sx={{ fontSize: 16, color: "text.secondary" }} />
@@ -201,7 +196,7 @@ const BookCard = ({
           </Box>
         )}
 
-        {/* Owner Info */}
+        {/* Owner */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
           <Avatar sx={{ width: 24, height: 24, bgcolor: "primary.light" }}>
             <AccountCircleIcon sx={{ fontSize: 16 }} />
