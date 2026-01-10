@@ -164,7 +164,13 @@ export default function Profile() {
   };
 
   const handleAddOrEditBook = async () => {
-    if (!bookTitle || !author || !location || !isbn || (!pictures.length && !editingBookId)) {
+    if (
+      !bookTitle ||
+      !author ||
+      !location ||
+      !isbn ||
+      (!pictures.length && !editingBookId)
+    ) {
       alert("Please fill all fields and upload at least one picture.");
       return;
     }
@@ -183,7 +189,10 @@ export default function Profile() {
 
       for (const file of pictures) {
         if (typeof file !== "string") {
-          const storageRef = ref(storage, `books/${user.uid}/${Date.now()}_${file.name}`);
+          const storageRef = ref(
+            storage,
+            `books/${user.uid}/${Date.now()}_${file.name}`
+          );
           await uploadBytes(storageRef, file);
           const url = await getDownloadURL(storageRef);
           pictureURLs.push(url);
@@ -191,7 +200,9 @@ export default function Profile() {
       }
 
       // Calculate availability + points
-      const currentAvailability = availableMap[isbn] ? availableMap[isbn] + (editingBookId ? 0 : 1) : 1;
+      const currentAvailability = availableMap[isbn]
+        ? availableMap[isbn] + (editingBookId ? 0 : 1)
+        : 1;
       const points = getBookPoints(currentAvailability);
 
       const booksRef = collection(db, "books");
@@ -265,23 +276,47 @@ export default function Profile() {
 
   const handleTabChange = (event, newValue) => setTabValue(newValue);
 
-  if (loading) return <CircularProgress sx={{ display: "block", margin: "50px auto" }} />;
+  if (loading)
+    return <CircularProgress sx={{ display: "block", margin: "50px auto" }} />;
   if (!userData) return <div>No user data found.</div>;
 
   return (
     <Box sx={{ maxWidth: 900, mx: "auto", py: 4, px: 2 }}>
       {/* Profile Header */}
-      <Paper elevation={3} sx={{ py: 3, px: 4, mb: 4, textAlign: "center", borderRadius: 3 }}>
-        <Avatar src={userData.photo} alt={userData.name} sx={{ width: 120, height: 120, mx: "auto", mb: 2 }} />
-        <Typography variant="h5" fontWeight="bold">{userData.name}</Typography>
-        <Typography variant="body1" color="text.secondary">{userData.email}</Typography>
-        <Typography variant="body1" fontWeight="bold" color="primary" sx={{ mt: 1 }}>
+      <Paper
+        elevation={3}
+        sx={{ py: 3, px: 4, mb: 4, textAlign: "center", borderRadius: 3 }}
+      >
+        <Avatar
+          src={userData.photo}
+          alt={userData.name}
+          sx={{ width: 120, height: 120, mx: "auto", mb: 2 }}
+        />
+        <Typography variant="h5" fontWeight="bold">
+          {userData.name}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {userData.email}
+        </Typography>
+        <Typography
+          variant="body1"
+          fontWeight="bold"
+          color="primary"
+          sx={{ mt: 1 }}
+        >
           📚 Points: {userData.points ?? 0}
         </Typography>
       </Paper>
 
       {/* Tabs */}
-      <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ mb: 3 }} indicatorColor="primary" textColor="primary">
+      <Tabs
+        value={tabValue}
+        onChange={handleTabChange}
+        centered
+        sx={{ mb: 3 }}
+        indicatorColor="primary"
+        textColor="primary"
+      >
         <Tab label="My Books" />
         <Tab label="Received Books" />
       </Tabs>
@@ -293,76 +328,153 @@ export default function Profile() {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 {book.pictures?.map((img, i) => (
-                  <Avatar key={i} src={img} variant="square" sx={{ width: 100, height: 100 }} />
+                  <Avatar
+                    key={i}
+                    src={img}
+                    variant="square"
+                    sx={{ width: 100, height: 100 }}
+                  />
                 ))}
               </Stack>
 
               <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" fontWeight="bold">{book.title}</Typography>
-                <Typography variant="body2" color="text.secondary">{book.author}</Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {book.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {book.author}
+                </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" mt={1}>
-                  <Chip label={`Condition: ${book.condition}`} size="small" color="success" />
-                  <Chip label={`Available: ${availableMap[book.isbn] || 0}`} size="small" variant="outlined" />
-                  <Chip label={`Location: ${book.location}`} size="small" variant="outlined" />
-                  <Chip label={`Points: ${book.points ?? getBookPoints(availableMap[book.isbn] || 0)}`} size="small" color="secondary" />
-                  <Tooltip title={book.description || "No description"}><InfoIcon color="action" fontSize="small" sx={{ alignSelf: "center" }} /></Tooltip>
+                  <Chip
+                    label={`Condition: ${book.condition}`}
+                    size="small"
+                    color="success"
+                  />
+                  <Chip
+                    label={`Available: ${availableMap[book.isbn] || 0}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Location: ${book.location}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Points: ${
+                      book.points ?? getBookPoints(availableMap[book.isbn] || 0)
+                    }`}
+                    size="small"
+                    color="secondary"
+                  />
+                  <Tooltip title={book.description || "No description"}>
+                    <InfoIcon
+                      color="action"
+                      fontSize="small"
+                      sx={{ alignSelf: "center" }}
+                    />
+                  </Tooltip>
                 </Stack>
               </Box>
 
               {tabValue === 0 && (
                 <Stack spacing={1} justifyContent="flex-start">
-                  <IconButton onClick={() => handleOpen(book)}><EditIcon /></IconButton>
-                  <IconButton onClick={() => handleDeleteBook(book.id)}><DeleteIcon /></IconButton>
+                  <IconButton onClick={() => handleOpen(book)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDeleteBook(book.id)}>
+                    <DeleteIcon />
+                  </IconButton>
                 </Stack>
               )}
             </Stack>
           </Paper>
         ))}
         {(tabValue === 0 ? myBooks : receivedBooks).length === 0 && (
-          <Typography textAlign="center" color="text.secondary">No books to display.</Typography>
+          <Typography textAlign="center" color="text.secondary">
+            No books to display.
+          </Typography>
         )}
       </Stack>
 
       {/* Floating Add Button */}
       {tabValue === 0 && (
-        <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: "fixed", bottom: 20, right: 20 }}>
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={() => handleOpen()}
+          sx={{ position: "fixed", bottom: 20, right: 20 }}
+        >
           <AddIcon />
         </Fab>
       )}
 
       {/* Add/Edit Modal */}
       <Modal open={openModal} onClose={handleClose}>
-        <Box sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: { xs: "95%", sm: 450 },
-          maxHeight: "90vh",
-          bgcolor: "background.paper",
-          borderRadius: 3,
-          boxShadow: 24,
-          p: 3,
-          overflowY: "auto"
-        }}>
-          <Typography variant="h6" mb={2} textAlign="center">{editingBookId ? "Edit Book" : "Add a Book"}</Typography>
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: { xs: "95%", sm: 450 },
+            maxHeight: "90vh",
+            bgcolor: "background.paper",
+            borderRadius: 3,
+            boxShadow: 24,
+            p: 3,
+            overflowY: "auto",
+          }}
+        >
+          <Typography variant="h6" mb={2} textAlign="center">
+            {editingBookId ? "Edit Book" : "Add a Book"}
+          </Typography>
 
           {/* Live Preview Card */}
           <Paper elevation={3} sx={{ mb: 2, p: 2, borderRadius: 2 }}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 {pictures.map((img, i) => (
-                  <Avatar key={i} src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
+                  <Avatar
+                    key={i}
+                    src={
+                      typeof img === "string" ? img : URL.createObjectURL(img)
+                    }
+                    variant="square"
+                    sx={{ width: 80, height: 80 }}
+                  />
                 ))}
               </Stack>
               <Box>
-                <Typography variant="subtitle1" fontWeight="bold">{bookTitle || "Book Title"}</Typography>
-                <Typography variant="body2" color="text.secondary">{author || "Author"}</Typography>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {bookTitle || "Book Title"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {author || "Author"}
+                </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" mt={1}>
-                  <Chip label={`Condition: ${condition}`} size="small" color="success" />
-                  <Chip label={`Available: ${availableMap[isbn] || 0}`} size="small" variant="outlined" />
-                  <Chip label={`Location: ${location || "-"}`} size="small" variant="outlined" />
-                  <Chip label={`Points: ${getBookPoints((availableMap[isbn] || 0) + (editingBookId ? 0 : 1))}`} size="small" color="secondary" />
+                  <Chip
+                    label={`Condition: ${condition}`}
+                    size="small"
+                    color="success"
+                  />
+                  <Chip
+                    label={`Available: ${availableMap[isbn] || 0}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Location: ${location || "-"}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Points: ${getBookPoints(
+                      (availableMap[isbn] || 0) + (editingBookId ? 0 : 1)
+                    )}`}
+                    size="small"
+                    color="secondary"
+                  />
                 </Stack>
               </Box>
             </Stack>
@@ -370,35 +482,112 @@ export default function Profile() {
 
           {/* Form Fields */}
           <Stack spacing={2}>
-            <TextField fullWidth label="Book Title" value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} />
-            <TextField fullWidth label="Author" value={author} onChange={(e) => setAuthor(e.target.value)} />
-            <TextField fullWidth label="Location" value={location} onChange={(e) => setLocation(e.target.value)} />
-            <TextField fullWidth label="ISBN Number" value={isbn} onChange={handleIsbnChange} helperText="Must be exactly 13 digits" />
-            <TextField fullWidth multiline rows={3} label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <Typography variant="caption">Available in database: {availableMap[isbn] || 0}</Typography>
+            <TextField
+              fullWidth
+              label="Book Title"
+              value={bookTitle}
+              onChange={(e) => setBookTitle(e.target.value)}
+            />
+            <TextField
+              fullWidth
+              label="Author"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+            />
+            <TextField
+              fullWidth
+              label="Location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+            <TextField
+              fullWidth
+              label="ISBN Number"
+              value={isbn}
+              onChange={handleIsbnChange}
+              helperText="Must be exactly 13 digits"
+            />
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <Typography variant="caption">
+              Available in database: {availableMap[isbn] || 0}
+            </Typography>
 
             <Box>
               <Typography gutterBottom>Condition: {condition}</Typography>
-              <Slider value={condition} onChange={(e, val) => setCondition(val)} min={1} max={10} valueLabelDisplay="auto" />
+              <Slider
+                value={condition}
+                onChange={(e, val) => setCondition(val)}
+                min={1}
+                max={10}
+                valueLabelDisplay="auto"
+              />
             </Box>
 
             {/* Pictures Upload */}
             <Stack direction="row" spacing={1} flexWrap="wrap">
               {pictures.map((img, i) => (
                 <Box key={i} sx={{ position: "relative" }}>
-                  <Avatar src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
-                  <Button size="small" color="error" sx={{ position: "absolute", top: -5, right: -15, bgcolor: "white", width: 20, height: 20 }} onClick={() => handleRemovePicture(i)}>x</Button>
+                  <Avatar
+                    src={
+                      typeof img === "string" ? img : URL.createObjectURL(img)
+                    }
+                    variant="square"
+                    sx={{ width: 80, height: 80 }}
+                  />
+                  <Button
+                    size="small"
+                    color="error"
+                    sx={{
+                      position: "absolute",
+                      top: -5,
+                      right: -15,
+                      bgcolor: "white",
+                      width: 20,
+                      height: 20,
+                    }}
+                    onClick={() => handleRemovePicture(i)}
+                  >
+                    x
+                  </Button>
                 </Box>
               ))}
               {pictures.length < 4 && (
-                <Button variant="outlined" component="label" sx={{ width: 80, height: 80, minWidth: 0, p: 0 }}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  sx={{ width: 80, height: 80, minWidth: 0, p: 0 }}
+                >
                   <AddIcon />
-                  <input type="file" hidden multiple onChange={handleAddPictures} accept="image/*" />
+                  <input
+                    type="file"
+                    hidden
+                    multiple
+                    onChange={handleAddPictures}
+                    accept="image/*"
+                  />
                 </Button>
               )}
             </Stack>
 
-            <Button variant="contained" fullWidth onClick={handleAddOrEditBook} disabled={saving}>{saving ? "Saving..." : editingBookId ? "Update Book" : "Add Book"}</Button>
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={handleAddOrEditBook}
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : editingBookId
+                ? "Update Book"
+                : "Add Book"}
+            </Button>
           </Stack>
         </Box>
       </Modal>

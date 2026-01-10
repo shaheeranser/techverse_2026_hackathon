@@ -3,7 +3,7 @@ import { Box, Grid, Typography, CircularProgress } from "@mui/material";
 import BookSearch from "../components/BookSearch";
 import BookCard from "../components/BookCard";
 import { useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 
 const Home = () => {
@@ -11,18 +11,25 @@ const Home = () => {
   const [allBooks, setAllBooks] = useState([]);
   const [filteredBooks, setFilteredBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   useEffect(() => {
     const fetchBooks = async () => {
       try {
-        const booksSnap = await getDocs(collection(db, "books"));
-        const booksData = booksSnap.docs.map((doc) => ({
+        const user = auth.currentUser;
+        setCurrentUserId(user?.uid || "");
+
+        const snap = await getDocs(collection(db, "books"));
+        const booksData = snap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
 
-        setAllBooks(booksData);
-        setFilteredBooks(booksData);
+        // Exclude books owned by the current user
+        const visibleBooks = booksData.filter((b) => b.ownerId !== user?.uid);
+
+        setAllBooks(visibleBooks);
+        setFilteredBooks(visibleBooks);
       } catch (err) {
         console.error("Error fetching books:", err);
       }
@@ -32,8 +39,7 @@ const Home = () => {
     fetchBooks();
   }, []);
 
-  // Filter callback
-  const handleFilterChange = (query /*, filters */) => {
+  const handleFilterChange = (query) => {
     let temp = [...allBooks];
 
     if (query) {
@@ -45,38 +51,6 @@ const Home = () => {
           b.isbn?.toString().includes(q)
       );
     }
-
-    // Commented out the rest for now
-    /*
-    // Condition filter
-    if (filters.condition.length) {
-      temp = temp.filter((b) =>
-        filters.condition.includes(
-          (typeof b.condition === "string"
-            ? b.condition.toLowerCase()
-            : b.condition?.toString()) || ""
-        )
-      );
-    }
-
-    // Points filter
-    temp = temp.filter(
-      (b) =>
-        (b.points || 0) >= filters.pointRange[0] &&
-        (b.points || 0) <= filters.pointRange[1]
-    );
-
-    // Availability filter
-    if (filters.availability === "available") {
-      temp = temp.filter((b) => b.available !== false);
-    }
-
-    // Location filter
-    if (filters.location) {
-      const loc = filters.location.toLowerCase();
-      temp = temp.filter((b) => b.location?.toLowerCase().includes(loc));
-    }
-    */
 
     setFilteredBooks(temp);
   };
