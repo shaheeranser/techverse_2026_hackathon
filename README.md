@@ -6,6 +6,16 @@ Project from TechVerse 2026's Web Hackathon module.
 
 This project involves developing a book exchange platform where users can swap their books with each other or receive a book from another user for points.
 
+### Overview
+
+Most of the core requirements of the system were achieved during the 8 hour development run; here are the requirements that were missed:
+
+```txt
+Book Swapping: Authorization error
+QR Code: Time constraint
+Payment Gateway: Time constraint
+```
+
 ### Technologies Used
 
 ```txt
