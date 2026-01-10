@@ -9,6 +9,7 @@ import { collection, getDocs } from "firebase/firestore";
 const Home = () => {
   const navigate = useNavigate();
   const [books, setBooks] = useState([]);
+  const [filteredBooks, setFilteredBooks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,10 +21,11 @@ const Home = () => {
           ...doc.data(),
         }));
 
-        // Shuffle books randomly
+        // Shuffle books randomly initially
         allBooks.sort(() => Math.random() - 0.5);
 
         setBooks(allBooks);
+        setFilteredBooks(allBooks);
       } catch (err) {
         console.error("Error fetching books:", err);
       }
@@ -33,9 +35,74 @@ const Home = () => {
     fetchBooks();
   }, []);
 
-  const handleSearch = (query) => {
-    console.log("Search query:", query);
-    // Optional: filter books by title, author, etc.
+  // Filtering function
+  const applyFilters = (query = "", filters = {}) => {
+    const q = query.toLowerCase();
+    const {
+      condition,
+      pointRange,
+      availability,
+      location,
+      sortBy,
+    } = filters;
+
+    let filtered = books.filter((book) => {
+      const matchesQuery =
+        book.title.toLowerCase().includes(q) ||
+        book.author.toLowerCase().includes(q) ||
+        (book.isbn || "").includes(q);
+
+      const matchesCondition =
+        condition.length === 0 || condition.includes(book.condition.toLowerCase());
+
+      const matchesPoints =
+        (book.points || 0) >= pointRange[0] && (book.points || 0) <= pointRange[1];
+
+      const matchesAvailability =
+        availability === "all" || (availability === "available" && book.available);
+
+      const matchesLocation =
+        !location || (book.location || "").toLowerCase().includes(location.toLowerCase());
+
+      return (
+        matchesQuery &&
+        matchesCondition &&
+        matchesPoints &&
+        matchesAvailability &&
+        matchesLocation
+      );
+    });
+
+    // Sorting
+    switch (sortBy) {
+      case "newest":
+        filtered.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+        break;
+      case "points-low":
+        filtered.sort((a, b) => (a.points || 0) - (b.points || 0));
+        break;
+      case "points-high":
+        filtered.sort((a, b) => (b.points || 0) - (a.points || 0));
+        break;
+      case "popular":
+        filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        break;
+      case "rare":
+        filtered.sort((a, b) => (a.rarity || 0) - (b.rarity || 0));
+        break;
+      default:
+        break;
+    }
+
+    setFilteredBooks(filtered);
+  };
+
+  const handleSearch = (query, filters = {}) => {
+    applyFilters(query, filters);
+  };
+
+  const handleFilterChange = (filters) => {
+    applyFilters("", filters); // Keep query empty if just updating filters
   };
 
   if (loading)
@@ -48,21 +115,21 @@ const Home = () => {
       </Typography>
 
       <Box sx={{ mb: 4 }}>
-        <BookSearch onSearch={handleSearch} />
+        <BookSearch onSearch={handleSearch} onFilterChange={handleFilterChange} />
       </Box>
 
       <Grid container spacing={3} justifyContent="center">
-        {books.length === 0 ? (
-          <Typography>No books available.</Typography>
+        {filteredBooks.length === 0 ? (
+          <Typography>No books match your search.</Typography>
         ) : (
-          books.map((book) => (
+          filteredBooks.map((book) => (
             <Grid item key={book.id}>
               <BookCard
                 onClick={() => navigate(`/book/${book.id}`)}
                 title={book.title}
                 owner={book.ownerName}
                 condition={book.condition}
-                image={book.picture}
+                image={book.pictures?.[0] || ""}
               />
             </Grid>
           ))
