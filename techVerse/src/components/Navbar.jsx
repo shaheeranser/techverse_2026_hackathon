@@ -1,8 +1,59 @@
-import { AppBar, Toolbar, Typography, Button, Box } from "@mui/material";
-import { Link, useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { AppBar, Toolbar, Typography, Button, Box, IconButton, Avatar, Popover } from "@mui/material";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { auth, provider, db } from "../firebase";
+import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function Navbar() {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
   const location = useLocation();
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Google login
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const loggedUser = result.user;
+
+      const userRef = doc(db, "users", loggedUser.uid);
+      const snap = await getDoc(userRef);
+
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          name: loggedUser.displayName,
+          email: loggedUser.email,
+          photo: loggedUser.photoURL,
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      console.error("Google login error:", err.message);
+    }
+  };
+
+  // Popover for avatar
+  const handleProfileClick = (event) => setAnchorEl(event.currentTarget);
+  const handlePopoverClose = () => setAnchorEl(null);
+  const handleGoToProfile = () => {
+    navigate("/profile");
+    handlePopoverClose();
+  };
+  const handleLogout = async () => {
+    await signOut(auth);
+    setAnchorEl(null);
+  };
+
+  const open = Boolean(anchorEl);
 
   return (
     <AppBar
@@ -33,18 +84,37 @@ export default function Navbar() {
 
         {/* Actions */}
         <Box>
-          <Button
-            component={Link}
-            to="/login"
-            variant={location.pathname === "/login" ? "contained" : "outlined"}
-            sx={{
-              textTransform: "none",
-              borderRadius: 2,
-              px: 3,
-            }}
-          >
-            Login
-          </Button>
+          {!user ? (
+            <Button
+              onClick={handleLogin}
+              variant={location.pathname === "/login" ? "contained" : "outlined"}
+              sx={{
+                textTransform: "none",
+                borderRadius: 2,
+                px: 3,
+              }}
+            >
+              Login
+            </Button>
+          ) : (
+            <>
+              <IconButton onClick={handleProfileClick}>
+                <Avatar src={user.photoURL} alt={user.displayName} />
+              </IconButton>
+              <Popover
+                open={open}
+                anchorEl={anchorEl}
+                onClose={handlePopoverClose}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Button onClick={handleGoToProfile}>Profile</Button>
+                  <Button onClick={handleLogout}>Logout</Button>
+                </Box>
+              </Popover>
+            </>
+          )}
         </Box>
       </Toolbar>
     </AppBar>
