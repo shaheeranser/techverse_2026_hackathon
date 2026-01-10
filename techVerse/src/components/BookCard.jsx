@@ -11,9 +11,10 @@ const BookCard = ({
   title,
   owner,
   condition,
+  onClick,
 }) => {
   return (
-    <Card
+    <Card onClick={onClick}
       sx={{
         width: 240,
         borderRadius: 3,
