@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { AppBar, Toolbar, Typography, Button, Box, IconButton, Avatar, Popover } from "@mui/material";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Box,
+  IconButton,
+  Avatar,
+  Popover,
+} from "@mui/material";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { auth, provider, db } from "../firebase";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
@@ -20,6 +29,7 @@ export default function Navbar() {
   }, []);
 
   // Google login
+  // Google login
   const handleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, provider);
@@ -29,12 +39,20 @@ export default function Navbar() {
       const snap = await getDoc(userRef);
 
       if (!snap.exists()) {
+        // First login: create user with 250 points
         await setDoc(userRef, {
           name: loggedUser.displayName,
           email: loggedUser.email,
           photo: loggedUser.photoURL,
+          points: 250, // give 250 points on first login
           createdAt: serverTimestamp(),
         });
+      } else {
+        // Optionally, you can check if points field exists and set it if missing
+        const userData = snap.data();
+        if (userData.points === undefined) {
+          await setDoc(userRef, { points: 250 }, { merge: true });
+        }
       }
     } catch (err) {
       console.error("Google login error:", err.message);
@@ -87,7 +105,9 @@ export default function Navbar() {
           {!user ? (
             <Button
               onClick={handleLogin}
-              variant={location.pathname === "/login" ? "contained" : "outlined"}
+              variant={
+                location.pathname === "/login" ? "contained" : "outlined"
+              }
               sx={{
                 textTransform: "none",
                 borderRadius: 2,
@@ -108,7 +128,14 @@ export default function Navbar() {
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
               >
-                <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                  }}
+                >
                   <Button onClick={handleGoToProfile}>Profile</Button>
                   <Button onClick={handleLogout}>Logout</Button>
                 </Box>

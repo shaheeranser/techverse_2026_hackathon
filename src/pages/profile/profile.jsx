@@ -25,15 +25,11 @@ import {
   Slider,
   CircularProgress,
   IconButton,
-  Card,
-  CardContent,
-  CardActions,
   Tabs,
   Tab,
   Stack,
   Chip,
   Paper,
-  Divider,
   Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -61,6 +57,7 @@ export default function Profile() {
 
   const [availableMap, setAvailableMap] = useState({});
 
+  // Fetch user and books data
   useEffect(() => {
     const fetchData = async () => {
       const user = auth.currentUser;
@@ -68,7 +65,15 @@ export default function Profile() {
 
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
-      if (snap.exists()) setUserData(snap.data());
+
+      if (snap.exists()) {
+        let data = snap.data();
+        if (data.points === undefined) {
+          await updateDoc(userRef, { points: 250 });
+          data.points = 250;
+        }
+        setUserData(data);
+      }
 
       await fetchMyBooks(user.uid);
       await fetchReceivedBooks(user.uid);
@@ -84,7 +89,7 @@ export default function Profile() {
     const snap = await getDocs(q);
     const books = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     setMyBooks(books);
-    await calculateAvailableForAll(books);
+    await calculateAvailableForAll();
   };
 
   const fetchReceivedBooks = async (uid) => {
@@ -94,16 +99,28 @@ export default function Profile() {
     setLoading(false);
   };
 
-  const calculateAvailableForAll = async (books) => {
+  const calculateAvailableForAll = async () => {
     const booksRef = collection(db, "books");
-    const newMap = {};
-    const allISBNs = Array.from(new Set(books.map((b) => b.isbn)));
-    for (const code of allISBNs) {
-      const q = query(booksRef, where("isbn", "==", code));
-      const snap = await getDocs(q);
-      newMap[code] = snap.size;
-    }
-    setAvailableMap(newMap);
+    const snap = await getDocs(booksRef);
+    const books = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const map = {};
+    books.forEach((b) => {
+      if (b.isbn) map[b.isbn] = (map[b.isbn] || 0) + 1;
+    });
+    setAvailableMap(map);
+  };
+
+  const getBookPoints = (count) => {
+    if (count === 1) return 50;
+    if (count === 2) return 30;
+    if (count === 3) return 25;
+    if (count === 4) return 20;
+    if (count === 5) return 18;
+    if (count === 6) return 15;
+    if (count === 7) return 13;
+    if (count === 8) return 12;
+    if (count === 9) return 11;
+    return 10;
   };
 
   const handleOpen = (book = null) => {
@@ -147,13 +164,7 @@ export default function Profile() {
   };
 
   const handleAddOrEditBook = async () => {
-    if (
-      !bookTitle ||
-      !author ||
-      !location ||
-      !isbn ||
-      (!pictures.length && !editingBookId)
-    ) {
+    if (!bookTitle || !author || !location || !isbn || (!pictures.length && !editingBookId)) {
       alert("Please fill all fields and upload at least one picture.");
       return;
     }
@@ -172,15 +183,16 @@ export default function Profile() {
 
       for (const file of pictures) {
         if (typeof file !== "string") {
-          const storageRef = ref(
-            storage,
-            `books/${user.uid}/${Date.now()}_${file.name}`
-          );
+          const storageRef = ref(storage, `books/${user.uid}/${Date.now()}_${file.name}`);
           await uploadBytes(storageRef, file);
           const url = await getDownloadURL(storageRef);
           pictureURLs.push(url);
         }
       }
+
+      // Calculate availability + points
+      const currentAvailability = availableMap[isbn] ? availableMap[isbn] + (editingBookId ? 0 : 1) : 1;
+      const points = getBookPoints(currentAvailability);
 
       const booksRef = collection(db, "books");
 
@@ -194,6 +206,7 @@ export default function Profile() {
           isbn,
           description,
           pictures: pictureURLs,
+          points,
         });
       } else {
         await addDoc(booksRef, {
@@ -207,10 +220,12 @@ export default function Profile() {
           ownerId: user.uid,
           ownerName: userData.name,
           ownerPhoto: userData.photo,
+          points,
           createdAt: serverTimestamp(),
         });
       }
 
+      await calculateAvailableForAll();
       await fetchMyBooks(user.uid);
       handleClose();
     } catch (err) {
@@ -226,6 +241,7 @@ export default function Profile() {
       const bookRef = doc(db, "books", id);
       await deleteDoc(bookRef);
       const user = auth.currentUser;
+      await calculateAvailableForAll();
       if (user) await fetchMyBooks(user.uid);
     } catch (err) {
       console.error(err);
@@ -235,8 +251,7 @@ export default function Profile() {
 
   const handleTabChange = (event, newValue) => setTabValue(newValue);
 
-  if (loading)
-    return <CircularProgress sx={{ display: "block", margin: "50px auto" }} />;
+  if (loading) return <CircularProgress sx={{ display: "block", margin: "50px auto" }} />;
   if (!userData) return <div>No user data found.</div>;
 
   return (
@@ -246,6 +261,9 @@ export default function Profile() {
         <Avatar src={userData.photo} alt={userData.name} sx={{ width: 120, height: 120, mx: "auto", mb: 2 }} />
         <Typography variant="h5" fontWeight="bold">{userData.name}</Typography>
         <Typography variant="body1" color="text.secondary">{userData.email}</Typography>
+        <Typography variant="body1" fontWeight="bold" color="primary" sx={{ mt: 1 }}>
+          📚 Points: {userData.points ?? 0}
+        </Typography>
       </Paper>
 
       {/* Tabs */}
@@ -272,9 +290,8 @@ export default function Profile() {
                   <Chip label={`Condition: ${book.condition}`} size="small" color="success" />
                   <Chip label={`Available: ${availableMap[book.isbn] || 0}`} size="small" variant="outlined" />
                   <Chip label={`Location: ${book.location}`} size="small" variant="outlined" />
-                  <Tooltip title={book.description || "No description"}>
-                    <InfoIcon color="action" fontSize="small" sx={{ alignSelf: "center" }} />
-                  </Tooltip>
+                  <Chip label={`Points: ${book.points ?? getBookPoints(availableMap[book.isbn] || 0)}`} size="small" color="secondary" />
+                  <Tooltip title={book.description || "No description"}><InfoIcon color="action" fontSize="small" sx={{ alignSelf: "center" }} /></Tooltip>
                 </Stack>
               </Box>
 
@@ -294,19 +311,26 @@ export default function Profile() {
 
       {/* Floating Add Button */}
       {tabValue === 0 && (
-        <Fab
-          color="primary"
-          aria-label="add"
-          onClick={() => handleOpen()}
-          sx={{ position: "fixed", bottom: 20, right: 20 }}
-        >
+        <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: "fixed", bottom: 20, right: 20 }}>
           <AddIcon />
         </Fab>
       )}
 
       {/* Add/Edit Modal */}
       <Modal open={openModal} onClose={handleClose}>
-        <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "95%", sm: 450 }, maxHeight: "90vh", bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 3, overflowY: "auto" }}>
+        <Box sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "95%", sm: 450 },
+          maxHeight: "90vh",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 3,
+          overflowY: "auto"
+        }}>
           <Typography variant="h6" mb={2} textAlign="center">{editingBookId ? "Edit Book" : "Add a Book"}</Typography>
 
           {/* Live Preview Card */}
@@ -324,6 +348,7 @@ export default function Profile() {
                   <Chip label={`Condition: ${condition}`} size="small" color="success" />
                   <Chip label={`Available: ${availableMap[isbn] || 0}`} size="small" variant="outlined" />
                   <Chip label={`Location: ${location || "-"}`} size="small" variant="outlined" />
+                  <Chip label={`Points: ${getBookPoints((availableMap[isbn] || 0) + (editingBookId ? 0 : 1))}`} size="small" color="secondary" />
                 </Stack>
               </Box>
             </Stack>
@@ -348,7 +373,7 @@ export default function Profile() {
               {pictures.map((img, i) => (
                 <Box key={i} sx={{ position: "relative" }}>
                   <Avatar src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
-                  <Button size="small" color="error" sx={{ position: "absolute", top: -5, right: -5 }} onClick={() => handleRemovePicture(i)}>x</Button>
+                  <Button size="small" color="error" sx={{ position: "absolute", top: -5, right: -15, bgcolor: "white", width: 20, height: 20 }} onClick={() => handleRemovePicture(i)}>x</Button>
                 </Box>
               ))}
               {pictures.length < 4 && (
