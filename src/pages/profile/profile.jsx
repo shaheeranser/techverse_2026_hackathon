@@ -49,13 +49,12 @@ export default function Profile() {
   const [location, setLocation] = useState("");
   const [condition, setCondition] = useState(5);
   const [isbn, setIsbn] = useState("");
-  const [picture, setPicture] = useState(null);
+  const [description, setDescription] = useState("");
+  const [pictures, setPictures] = useState([]); // URLs or File objects
   const [saving, setSaving] = useState(false);
 
-  // Store available quantities by ISBN
   const [availableMap, setAvailableMap] = useState({});
 
-  // Fetch user data and books
   useEffect(() => {
     const fetchData = async () => {
       const user = auth.currentUser;
@@ -89,7 +88,6 @@ export default function Profile() {
     setLoading(false);
   };
 
-  // Calculate available quantities for all ISBNs
   const calculateAvailableForAll = async (books) => {
     const booksRef = collection(db, "books");
     const newMap = {};
@@ -102,7 +100,6 @@ export default function Profile() {
     setAvailableMap(newMap);
   };
 
-  // Handle modal open
   const handleOpen = (book = null) => {
     if (book) {
       setEditingBookId(book.id);
@@ -111,6 +108,8 @@ export default function Profile() {
       setLocation(book.location);
       setCondition(book.condition);
       setIsbn(book.isbn || "");
+      setDescription(book.description || "");
+      setPictures(book.pictures || []);
     } else {
       setEditingBookId(null);
       setBookTitle("");
@@ -118,44 +117,53 @@ export default function Profile() {
       setLocation("");
       setCondition(5);
       setIsbn("");
-      setPicture(null);
+      setDescription("");
+      setPictures([]);
     }
     setOpenModal(true);
   };
   const handleClose = () => setOpenModal(false);
 
-  const handlePictureChange = (e) => {
-    if (e.target.files[0]) setPicture(e.target.files[0]);
+  const handleAddPictures = (e) => {
+    const files = Array.from(e.target.files);
+    const remainingSlots = 4 - pictures.length;
+    if (remainingSlots <= 0) return;
+    setPictures([...pictures, ...files.slice(0, remainingSlots)]);
+  };
+
+  const handleRemovePicture = (index) => {
+    setPictures(pictures.filter((_, i) => i !== index));
   };
 
   const handleIsbnChange = (e) => {
-    setIsbn(e.target.value);
+    const val = e.target.value;
+    if (/^\d*$/.test(val)) setIsbn(val.slice(0, 13)); // only digits, max 13
   };
 
   const handleAddOrEditBook = async () => {
-    if (
-      !bookTitle ||
-      !author ||
-      !location ||
-      !isbn ||
-      (!picture && !editingBookId)
-    ) {
-      alert("Please fill all fields and upload a picture.");
+    if (!bookTitle || !author || !location || !isbn || (!pictures.length && !editingBookId)) {
+      alert("Please fill all fields and upload at least one picture.");
+      return;
+    }
+
+    if (isbn.length !== 13) {
+      alert("ISBN must be exactly 13 digits.");
       return;
     }
 
     setSaving(true);
     try {
-      let pictureURL = null;
       const user = auth.currentUser;
+      let pictureURLs = editingBookId ? [...pictures.filter(p => typeof p === 'string')] : [];
 
-      if (picture) {
-        const storageRef = ref(
-          storage,
-          `books/${user.uid}/${Date.now()}_${picture.name}`
-        );
-        await uploadBytes(storageRef, picture);
-        pictureURL = await getDownloadURL(storageRef);
+      // upload new files only
+      for (const file of pictures) {
+        if (typeof file !== "string") {
+          const storageRef = ref(storage, `books/${user.uid}/${Date.now()}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          const url = await getDownloadURL(storageRef);
+          pictureURLs.push(url);
+        }
       }
 
       const booksRef = collection(db, "books");
@@ -167,8 +175,9 @@ export default function Profile() {
           author,
           location,
           condition,
-          ...(pictureURL && { picture: pictureURL }),
           isbn,
+          description,
+          pictures: pictureURLs,
         });
       } else {
         await addDoc(booksRef, {
@@ -176,8 +185,9 @@ export default function Profile() {
           author,
           location,
           condition,
-          picture: pictureURL,
           isbn,
+          description,
+          pictures: pictureURLs,
           ownerId: user.uid,
           ownerName: userData.name,
           ownerPhoto: userData.photo,
@@ -185,9 +195,7 @@ export default function Profile() {
         });
       }
 
-      // Refresh books and available map
       await fetchMyBooks(user.uid);
-
       handleClose();
     } catch (err) {
       console.error(err);
@@ -201,7 +209,6 @@ export default function Profile() {
     try {
       const bookRef = doc(db, "books", id);
       await deleteDoc(bookRef);
-
       const user = auth.currentUser;
       if (user) await fetchMyBooks(user.uid);
     } catch (err) {
@@ -218,190 +225,103 @@ export default function Profile() {
   if (!userData) return <div>No user data found.</div>;
 
   return (
-    <Box
-      sx={{ padding: 3, maxWidth: 800, margin: "auto", textAlign: "center" }}
-    >
-      <Typography variant="h4" mb={2}>
-        Profile Page
-      </Typography>
-      <Avatar
-        src={userData.photo}
-        alt={userData.name}
-        sx={{ width: 100, height: 100, margin: "auto", mb: 2 }}
-      />
+    <Box sx={{ padding: 3, maxWidth: 800, margin: "auto", textAlign: "center" }}>
+      <Typography variant="h4" mb={2}>Profile Page</Typography>
+      <Avatar src={userData.photo} alt={userData.name} sx={{ width: 100, height: 100, margin: "auto", mb: 2 }} />
       <Typography variant="h6">{userData.name}</Typography>
-      <Typography variant="body1" mb={4}>
-        {userData.email}
-      </Typography>
+      <Typography variant="body1" mb={4}>{userData.email}</Typography>
 
-      <Tabs
-        value={tabValue}
-        onChange={handleTabChange}
-        centered
-        sx={{ mb: 3 }}
-        indicatorColor="primary"
-        textColor="primary"
-      >
+      <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ mb: 3 }} indicatorColor="primary" textColor="primary">
         <Tab label="My Books" />
         <Tab label="Received Books" />
       </Tabs>
 
       {tabValue === 0 && (
         <Box>
-          {myBooks.length === 0 ? (
-            <Typography>No books added yet.</Typography>
-          ) : (
+          {myBooks.length === 0 ? <Typography>No books added yet.</Typography> :
             myBooks.map((book) => (
               <Card key={book.id} sx={{ mb: 2 }}>
-                <CardContent sx={{ display: "flex", alignItems: "center" }}>
-                  <Avatar
-                    src={book.picture}
-                    variant="square"
-                    sx={{ width: 80, height: 80, mr: 2 }}
-                  />
-                  <Box sx={{ flexGrow: 1, textAlign: "left" }}>
-                    <Typography variant="h6">{book.title}</Typography>
-                    <Typography variant="body2">
-                      Author: {book.author} | Location: {book.location} |
-                      Condition: {book.condition} | Available:{" "}
-                      {availableMap[book.isbn] || 0}
-                    </Typography>
+                <CardContent>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                    {book.pictures?.map((img, i) => (
+                      <Avatar key={i} src={img} variant="square" sx={{ width: 80, height: 80 }} />
+                    ))}
                   </Box>
+                  <Typography variant="h6">{book.title}</Typography>
+                  <Typography variant="body2">
+                    Author: {book.author} | Location: {book.location} | Condition: {book.condition} | Available: {availableMap[book.isbn] || 0}
+                  </Typography>
+                  <Typography variant="body2">{book.description}</Typography>
                   <CardActions>
-                    <IconButton onClick={() => handleOpen(book)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDeleteBook(book.id)}>
-                      <DeleteIcon />
-                    </IconButton>
+                    <IconButton onClick={() => handleOpen(book)}><EditIcon /></IconButton>
+                    <IconButton onClick={() => handleDeleteBook(book.id)}><DeleteIcon /></IconButton>
                   </CardActions>
                 </CardContent>
               </Card>
             ))
-          )}
+          }
         </Box>
       )}
 
       {tabValue === 1 && (
         <Box>
-          {receivedBooks.length === 0 ? (
-            <Typography>No received books yet.</Typography>
-          ) : (
+          {receivedBooks.length === 0 ? <Typography>No received books yet.</Typography> :
             receivedBooks.map((book) => (
               <Card key={book.id} sx={{ mb: 2 }}>
-                <CardContent sx={{ display: "flex", alignItems: "center" }}>
-                  <Avatar
-                    src={book.picture}
-                    variant="square"
-                    sx={{ width: 80, height: 80, mr: 2 }}
-                  />
-                  <Box sx={{ flexGrow: 1, textAlign: "left" }}>
-                    <Typography variant="h6">{book.title}</Typography>
-                    <Typography variant="body2">
-                      Author: {book.author} | Location: {book.location} |
-                      Condition: {book.condition} | Available:{" "}
-                      {availableMap[book.isbn] || 0}
-                    </Typography>
+                <CardContent>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                    {book.pictures?.map((img, i) => (
+                      <Avatar key={i} src={img} variant="square" sx={{ width: 80, height: 80 }} />
+                    ))}
                   </Box>
+                  <Typography variant="h6">{book.title}</Typography>
+                  <Typography variant="body2">
+                    Author: {book.author} | Location: {book.location} | Condition: {book.condition} | Available: {availableMap[book.isbn] || 0}
+                  </Typography>
+                  <Typography variant="body2">{book.description}</Typography>
                 </CardContent>
               </Card>
             ))
-          )}
+          }
         </Box>
       )}
 
       {tabValue === 0 && (
-        <Fab
-          color="primary"
-          aria-label="add"
-          onClick={() => handleOpen()}
-          sx={{ position: "fixed", bottom: 20, right: 20 }}
-        >
+        <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: "fixed", bottom: 20, right: 20 }}>
           <AddIcon />
         </Fab>
       )}
 
       <Modal open={openModal} onClose={handleClose}>
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: { xs: "90%", sm: 400 },
-            bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 4,
-          }}
-        >
-          <Typography variant="h6" mb={2}>
-            {editingBookId ? "Edit Book" : "Add a Book"}
-          </Typography>
-          <TextField
-            fullWidth
-            label="Book Title"
-            value={bookTitle}
-            onChange={(e) => setBookTitle(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="Author"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="Location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="ISBN Number"
-            value={isbn}
-            onChange={handleIsbnChange}
-            sx={{ mb: 1 }}
-          />
-          <Typography variant="caption" display="block" mb={2}>
-            Available in database: {availableMap[isbn] || 0}
-          </Typography>
+        <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "90%", sm: 400 }, bgcolor: "background.paper", borderRadius: 2, boxShadow: 24, p: 4 }}>
+          <Typography variant="h6" mb={2}>{editingBookId ? "Edit Book" : "Add a Book"}</Typography>
+          <TextField fullWidth label="Book Title" value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} sx={{ mb: 2 }} />
+          <TextField fullWidth label="Author" value={author} onChange={(e) => setAuthor(e.target.value)} sx={{ mb: 2 }} />
+          <TextField fullWidth label="Location" value={location} onChange={(e) => setLocation(e.target.value)} sx={{ mb: 2 }} />
+          <TextField fullWidth label="ISBN Number" value={isbn} onChange={handleIsbnChange} sx={{ mb: 2 }} helperText="Must be exactly 13 digits" />
+          <TextField fullWidth multiline rows={3} label="Description" value={description} onChange={(e) => setDescription(e.target.value)} sx={{ mb: 2 }} />
+          <Typography variant="caption" display="block" mb={2}>Available in database: {availableMap[isbn] || 0}</Typography>
           <Box sx={{ mb: 2 }}>
             <Typography gutterBottom>Condition: {condition}</Typography>
-            <Slider
-              value={condition}
-              onChange={(e, val) => setCondition(val)}
-              min={1}
-              max={10}
-              valueLabelDisplay="auto"
-            />
+            <Slider value={condition} onChange={(e, val) => setCondition(val)} min={1} max={10} valueLabelDisplay="auto" />
           </Box>
-          <Button
-            variant="contained"
-            component="label"
-            fullWidth
-            sx={{ mb: 2 }}
-          >
-            {editingBookId ? "Upload New Picture" : "Upload Picture"}
-            <input
-              type="file"
-              hidden
-              onChange={handlePictureChange}
-              accept="image/*"
-            />
-          </Button>
-          {picture && <Typography variant="body2">{picture.name}</Typography>}
-          <Button
-            variant="contained"
-            fullWidth
-            onClick={handleAddOrEditBook}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : editingBookId ? "Update Book" : "Add Book"}
-          </Button>
+
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+            {pictures.map((img, i) => (
+              <Box key={i} sx={{ position: "relative" }}>
+                <Avatar src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
+                <Button size="small" color="error" sx={{ position: "absolute", top: -5, right: -5 }} onClick={() => handleRemovePicture(i)}>x</Button>
+              </Box>
+            ))}
+            {pictures.length < 4 && (
+              <Button variant="outlined" component="label" sx={{ width: 80, height: 80, minWidth: 0, p: 0 }}>
+                <AddIcon />
+                <input type="file" hidden multiple onChange={handleAddPictures} accept="image/*" />
+              </Button>
+            )}
+          </Box>
+
+          <Button variant="contained" fullWidth onClick={handleAddOrEditBook} disabled={saving}>{saving ? "Saving..." : editingBookId ? "Update Book" : "Add Book"}</Button>
         </Box>
       </Modal>
     </Box>
