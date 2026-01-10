@@ -147,7 +147,13 @@ export default function Profile() {
   };
 
   const handleAddOrEditBook = async () => {
-    if (!bookTitle || !author || !location || !isbn || (!pictures.length && !editingBookId)) {
+    if (
+      !bookTitle ||
+      !author ||
+      !location ||
+      !isbn ||
+      (!pictures.length && !editingBookId)
+    ) {
       alert("Please fill all fields and upload at least one picture.");
       return;
     }
@@ -160,11 +166,16 @@ export default function Profile() {
     setSaving(true);
     try {
       const user = auth.currentUser;
-      let pictureURLs = editingBookId ? [...pictures.filter(p => typeof p === 'string')] : [];
+      let pictureURLs = editingBookId
+        ? [...pictures.filter((p) => typeof p === "string")]
+        : [];
 
       for (const file of pictures) {
         if (typeof file !== "string") {
-          const storageRef = ref(storage, `books/${user.uid}/${Date.now()}_${file.name}`);
+          const storageRef = ref(
+            storage,
+            `books/${user.uid}/${Date.now()}_${file.name}`
+          );
           await uploadBytes(storageRef, file);
           const url = await getDownloadURL(storageRef);
           pictureURLs.push(url);
@@ -283,7 +294,12 @@ export default function Profile() {
 
       {/* Floating Add Button */}
       {tabValue === 0 && (
-        <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: "fixed", bottom: 20, right: 20 }}>
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={() => handleOpen()}
+          sx={{ position: "fixed", bottom: 20, right: 20 }}
+        >
           <AddIcon />
         </Fab>
       )}
