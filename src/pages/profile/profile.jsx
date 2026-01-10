@@ -448,23 +448,74 @@ export default function Profile() {
       {/* Modal code stays the same... */}
       {/* Add/Edit Modal */}
       <Modal open={openModal} onClose={handleClose}>
-        {/* ... your existing modal code ... */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: { xs: "95%", sm: 450 },
-            maxHeight: "90vh",
-            bgcolor: "background.paper",
-            borderRadius: 3,
-            boxShadow: 24,
-            p: 3,
-            overflowY: "auto",
-          }}
-        >
-          {/* Your existing modal content */}
+        <Box sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "95%", sm: 450 },
+          maxHeight: "90vh",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 3,
+          overflowY: "auto"
+        }}>
+          <Typography variant="h6" mb={2} textAlign="center">{editingBookId ? "Edit Book" : "Add a Book"}</Typography>
+
+          {/* Live Preview Card */}
+          <Paper elevation={3} sx={{ mb: 2, p: 2, borderRadius: 2 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {pictures.map((img, i) => (
+                  <Avatar key={i} src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
+                ))}
+              </Stack>
+              <Box>
+                <Typography variant="subtitle1" fontWeight="bold">{bookTitle || "Book Title"}</Typography>
+                <Typography variant="body2" color="text.secondary">{author || "Author"}</Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" mt={1}>
+                  <Chip label={`Condition: ${condition}`} size="small" color="success" />
+                  <Chip label={`Available: ${availableMap[isbn] || 0}`} size="small" variant="outlined" />
+                  <Chip label={`Location: ${location || "-"}`} size="small" variant="outlined" />
+                  <Chip label={`Points: ${getBookPoints((availableMap[isbn] || 0) + (editingBookId ? 0 : 1))}`} size="small" color="secondary" />
+                </Stack>
+              </Box>
+            </Stack>
+          </Paper>
+
+          {/* Form Fields */}
+          <Stack spacing={2}>
+            <TextField fullWidth label="Book Title" value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} />
+            <TextField fullWidth label="Author" value={author} onChange={(e) => setAuthor(e.target.value)} />
+            <TextField fullWidth label="Location" value={location} onChange={(e) => setLocation(e.target.value)} />
+            <TextField fullWidth label="ISBN Number" value={isbn} onChange={handleIsbnChange} helperText="Must be exactly 13 digits" />
+            <TextField fullWidth multiline rows={3} label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Typography variant="caption">Available in database: {availableMap[isbn] || 0}</Typography>
+
+            <Box>
+              <Typography gutterBottom>Condition: {condition}</Typography>
+              <Slider value={condition} onChange={(e, val) => setCondition(val)} min={1} max={10} valueLabelDisplay="auto" />
+            </Box>
+
+            {/* Pictures Upload */}
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {pictures.map((img, i) => (
+                <Box key={i} sx={{ position: "relative" }}>
+                  <Avatar src={typeof img === "string" ? img : URL.createObjectURL(img)} variant="square" sx={{ width: 80, height: 80 }} />
+                  <Button size="small" color="error" sx={{ position: "absolute", top: -5, right: -15, bgcolor: "white", width: 20, height: 20 }} onClick={() => handleRemovePicture(i)}>x</Button>
+                </Box>
+              ))}
+              {pictures.length < 4 && (
+                <Button variant="outlined" component="label" sx={{ width: 80, height: 80, minWidth: 0, p: 0 }}>
+                  <AddIcon />
+                  <input type="file" hidden multiple onChange={handleAddPictures} accept="image/*" />
+                </Button>
+              )}
+            </Stack>
+
+            <Button variant="contained" fullWidth onClick={handleAddOrEditBook} disabled={saving}>{saving ? "Saving..." : editingBookId ? "Update Book" : "Add Book"}</Button>
+          </Stack>
         </Box>
       </Modal>
     </Box>
