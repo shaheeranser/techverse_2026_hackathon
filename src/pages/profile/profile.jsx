@@ -209,21 +209,35 @@ export default function Profile() {
           points,
         });
       } else {
-        await addDoc(booksRef, {
-          title: bookTitle,
-          author,
-          location,
-          condition,
-          isbn,
-          description,
-          pictures: pictureURLs,
-          ownerId: user.uid,
-          ownerName: userData.name,
-          ownerPhoto: userData.photo,
-          points,
-          createdAt: serverTimestamp(),
-        });
-      }
+          await addDoc(booksRef, {
+            title: bookTitle,
+            author,
+            location,
+            condition,
+            isbn,
+            description,
+            pictures: pictureURLs,
+            ownerId: user.uid,
+            ownerName: userData.name,
+            ownerPhoto: userData.photo,
+            points,
+            createdAt: serverTimestamp(),
+          });
+
+          // 🔥 ADD +10 POINTS TO USER
+          const userRef = doc(db, "users", user.uid);
+          const newPoints = (userData.points || 0) + 10;
+
+          await updateDoc(userRef, {
+            points: newPoints,
+          });
+
+          // Keep UI in sync
+          setUserData((prev) => ({
+            ...prev,
+            points: newPoints,
+          }));
+        }
 
       await calculateAvailableForAll();
       await fetchMyBooks(user.uid);
