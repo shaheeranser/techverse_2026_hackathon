@@ -1,14 +1,12 @@
-import React from 'react'
-import Home from '../pages/Home.jsx'
-import Login from '../pages/Login.jsx'
+import Navbar from "./Navbar.jsx";
 
-const Index = () => {
+const Index = ({ children }) => {
   return (
-    <div>
-        <Home />
-        <Login />
-    </div>
-  )
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
 }
 
-export default Index
+export default Index;
