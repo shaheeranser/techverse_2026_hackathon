@@ -30,10 +30,16 @@ import {
   CardActions,
   Tabs,
   Tab,
+  Stack,
+  Chip,
+  Paper,
+  Divider,
+  Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import InfoIcon from "@mui/icons-material/Info";
 
 export default function Profile() {
   const [userData, setUserData] = useState(null);
@@ -221,7 +227,6 @@ export default function Profile() {
 
   if (loading)
     return <CircularProgress sx={{ display: "block", margin: "50px auto" }} />;
-
   if (!userData) return <div>No user data found.</div>;
 
   return (
@@ -236,6 +241,7 @@ export default function Profile() {
         <Tab label="Received Books" />
       </Tabs>
 
+      {/* Tab Panels */}
       {tabValue === 0 && (
         <Box>
           {myBooks.length === 0 ? <Typography>No books added yet.</Typography> :
@@ -286,12 +292,14 @@ export default function Profile() {
         </Box>
       )}
 
+      {/* Floating Add Button */}
       {tabValue === 0 && (
         <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: "fixed", bottom: 20, right: 20 }}>
           <AddIcon />
         </Fab>
       )}
 
+      {/* Add/Edit Book Modal */}
       <Modal open={openModal} onClose={handleClose}>
         <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "90%", sm: 400 }, bgcolor: "background.paper", borderRadius: 2, boxShadow: 24, p: 4 }}>
           <Typography variant="h6" mb={2}>{editingBookId ? "Edit Book" : "Add a Book"}</Typography>
