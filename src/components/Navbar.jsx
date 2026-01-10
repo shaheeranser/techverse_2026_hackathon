@@ -47,6 +47,8 @@ export default function Navbar() {
           points: 250, // give 250 points on first login
           createdAt: serverTimestamp(),
         });
+
+        localStorage.setItem("loggedIn", "true");
       } else {
         // Optionally, you can check if points field exists and set it if missing
         const userData = snap.data();
@@ -68,6 +70,7 @@ export default function Navbar() {
   };
   const handleLogout = async () => {
     await signOut(auth);
+    localStorage.removeItem("loggedIn");
     setAnchorEl(null);
   };
 
