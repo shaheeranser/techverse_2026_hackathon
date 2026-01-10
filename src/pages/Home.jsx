@@ -8,7 +8,7 @@ import { collection, getDocs } from "firebase/firestore";
 
 const Home = () => {
   const navigate = useNavigate();
-  const [books, setBooks] = useState([]);
+  const [allBooks, setAllBooks] = useState([]);
   const [filteredBooks, setFilteredBooks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,16 +16,13 @@ const Home = () => {
     const fetchBooks = async () => {
       try {
         const booksSnap = await getDocs(collection(db, "books"));
-        const allBooks = booksSnap.docs.map((doc) => ({
+        const booksData = booksSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
 
-        // Shuffle books randomly initially
-        allBooks.sort(() => Math.random() - 0.5);
-
-        setBooks(allBooks);
-        setFilteredBooks(allBooks);
+        setAllBooks(booksData);
+        setFilteredBooks(booksData);
       } catch (err) {
         console.error("Error fetching books:", err);
       }
@@ -35,74 +32,53 @@ const Home = () => {
     fetchBooks();
   }, []);
 
-  // Filtering function
-  const applyFilters = (query = "", filters = {}) => {
-    const q = query.toLowerCase();
-    const {
-      condition,
-      pointRange,
-      availability,
-      location,
-      sortBy,
-    } = filters;
+  // Filter callback
+  const handleFilterChange = (query /*, filters */) => {
+    let temp = [...allBooks];
 
-    let filtered = books.filter((book) => {
-      const matchesQuery =
-        book.title.toLowerCase().includes(q) ||
-        book.author.toLowerCase().includes(q) ||
-        (book.isbn || "").includes(q);
-
-      const matchesCondition =
-        condition.length === 0 || condition.includes(book.condition.toLowerCase());
-
-      const matchesPoints =
-        (book.points || 0) >= pointRange[0] && (book.points || 0) <= pointRange[1];
-
-      const matchesAvailability =
-        availability === "all" || (availability === "available" && book.available);
-
-      const matchesLocation =
-        !location || (book.location || "").toLowerCase().includes(location.toLowerCase());
-
-      return (
-        matchesQuery &&
-        matchesCondition &&
-        matchesPoints &&
-        matchesAvailability &&
-        matchesLocation
+    if (query) {
+      const q = query.toLowerCase();
+      temp = temp.filter(
+        (b) =>
+          b.title?.toLowerCase().includes(q) ||
+          b.author?.toLowerCase().includes(q) ||
+          b.isbn?.toString().includes(q)
       );
-    });
-
-    // Sorting
-    switch (sortBy) {
-      case "newest":
-        filtered.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
-        break;
-      case "points-low":
-        filtered.sort((a, b) => (a.points || 0) - (b.points || 0));
-        break;
-      case "points-high":
-        filtered.sort((a, b) => (b.points || 0) - (a.points || 0));
-        break;
-      case "popular":
-        filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-        break;
-      case "rare":
-        filtered.sort((a, b) => (a.rarity || 0) - (b.rarity || 0));
-        break;
-      default:
-        break;
     }
 
-    setFilteredBooks(filtered);
-  };
+    // Commented out the rest for now
+    /*
+    // Condition filter
+    if (filters.condition.length) {
+      temp = temp.filter((b) =>
+        filters.condition.includes(
+          (typeof b.condition === "string"
+            ? b.condition.toLowerCase()
+            : b.condition?.toString()) || ""
+        )
+      );
+    }
 
-  const handleSearch = (query, filters = {}) => {
-    applyFilters(query, filters);
-  };
+    // Points filter
+    temp = temp.filter(
+      (b) =>
+        (b.points || 0) >= filters.pointRange[0] &&
+        (b.points || 0) <= filters.pointRange[1]
+    );
 
-  const handleFilterChange = (filters) => {
-    applyFilters("", filters); // Keep query empty if just updating filters
+    // Availability filter
+    if (filters.availability === "available") {
+      temp = temp.filter((b) => b.available !== false);
+    }
+
+    // Location filter
+    if (filters.location) {
+      const loc = filters.location.toLowerCase();
+      temp = temp.filter((b) => b.location?.toLowerCase().includes(loc));
+    }
+    */
+
+    setFilteredBooks(temp);
   };
 
   if (loading)
@@ -115,12 +91,12 @@ const Home = () => {
       </Typography>
 
       <Box sx={{ mb: 4 }}>
-        <BookSearch onSearch={handleSearch} onFilterChange={handleFilterChange} />
+        <BookSearch onFilterChange={handleFilterChange} />
       </Box>
 
       <Grid container spacing={3} justifyContent="center">
         {filteredBooks.length === 0 ? (
-          <Typography>No books match your search.</Typography>
+          <Typography>No books available.</Typography>
         ) : (
           filteredBooks.map((book) => (
             <Grid item key={book.id}>
@@ -129,7 +105,7 @@ const Home = () => {
                 title={book.title}
                 owner={book.ownerName}
                 condition={book.condition}
-                image={book.pictures?.[0] || ""}
+                image={book.pictures?.[0]} // first picture
               />
             </Grid>
           ))

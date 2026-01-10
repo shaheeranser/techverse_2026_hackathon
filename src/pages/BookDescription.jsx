@@ -1,4 +1,3 @@
-// BookDescription.jsx
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
@@ -15,24 +14,29 @@ import {
   Avatar,
   Stack,
   Button,
+  Modal,
+  IconButton,
 } from "@mui/material";
 import {
   AccountCircle as AccountIcon,
   Star as StarIcon,
   LocationOn as LocationIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
-import { db, auth } from "../firebase"; // adjust your path
+import { db, auth } from "../firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 
 const BookDescription = () => {
-  const { bookId } = useParams(); // destructure properly from route
+  const { bookId } = useParams();
   const [tab, setTab] = useState(0);
   const [book, setBook] = useState(null);
   const [exchangeHistory, setExchangeHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [currentUser, setCurrentUser] = useState({ points: 0, userId: "", name: "" });
+
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState("");
 
   const nearbyExchangePoints = [
     { id: "ep1", name: "Karachi Book Hub", address: "Saddar, Karachi", distance: "2.3 km", hours: "Sat-Sun 2-5 PM" },
@@ -50,11 +54,9 @@ const BookDescription = () => {
       setLoading(true);
 
       try {
-        // Get current user info
         const user = auth.currentUser;
         if (user) setCurrentUser({ points: 250, userId: user.uid, name: user.displayName || "User" });
 
-        // Fetch book data
         const bookRef = doc(db, "books", bookId);
         const bookSnap = await getDoc(bookRef);
 
@@ -69,7 +71,6 @@ const BookDescription = () => {
         const bookData = { id: bookSnap.id, ...bookSnap.data() };
         setBook(bookData);
 
-        // Fetch exchange history subcollection if exists
         const historyRef = collection(db, "books", bookId, "exchangeHistory");
         const historySnap = await getDocs(historyRef);
         const historyData = historySnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -87,30 +88,50 @@ const BookDescription = () => {
 
   const handleTabChange = (event, newValue) => setTab(newValue);
 
+  const openLightbox = (image) => {
+    setLightboxImage(image);
+    setLightboxOpen(true);
+  };
+
+  const closeLightbox = () => setLightboxOpen(false);
+
   if (loading) return <Typography sx={{ textAlign: "center", mt: 5 }}>Loading...</Typography>;
   if (error) return <Typography sx={{ textAlign: "center", mt: 5, color: "red" }}>{error}</Typography>;
   if (!book) return null;
-
-  const canAfford = currentUser.points >= (book.calculatedPoints || 0);
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, maxWidth: 1400, margin: "0 auto" }}>
       {/* Breadcrumbs */}
       <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 3 }}>
         <Link to="/" style={{ textDecoration: "none", color: "inherit" }}>Home</Link>
-        <Link to="/books" style={{ textDecoration: "none", color: "inherit" }}>Books</Link>
         <Typography color="text.primary">{book.title || "Book"}</Typography>
       </Breadcrumbs>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={4} sx={{ width: "100%" }}>
         {/* Left Column */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ borderRadius: 3, mb: 2 }}>
+        <Grid
+          item
+          xs={12}
+          md={4}
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            maxWidth: "33.333%",
+            flexShrink: 0,
+          }}
+        >
+          <Card sx={{ borderRadius: 3, flex: 1, overflow: "hidden" }}>
             <CardMedia
               component="img"
               image={book.pictures?.[0] || ""}
               alt={book.title}
-              sx={{ width: "100%", height: "auto" }}
+              sx={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                maxWidth: "100%",
+              }}
             />
           </Card>
 
@@ -138,7 +159,15 @@ const BookDescription = () => {
         </Grid>
 
         {/* Right Column */}
-        <Grid item xs={12} md={8}>
+        <Grid
+          item
+          xs={12}
+          md={8}
+          sx={{
+            maxWidth: "66.666%",
+            flexGrow: 1,
+          }}
+        >
           <Paper sx={{ borderRadius: 3 }}>
             <Tabs value={tab} onChange={handleTabChange} indicatorColor="primary" textColor="primary" variant="fullWidth">
               <Tab label="Details" />
@@ -154,13 +183,22 @@ const BookDescription = () => {
                   <Typography variant="h6" color="text.secondary">{book.author}</Typography>
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="body1">{book.description}</Typography>
+
                   <Box sx={{ mt: 3 }}>
-                    <Typography variant="subtitle1">Additional Photos</Typography>
+                    <Typography variant="subtitle1" gutterBottom>Additional Photos</Typography>
                     <Grid container spacing={2}>
                       {book.pictures?.map((p, i) => (
                         <Grid item xs={6} sm={4} key={i}>
-                          <Card>
-                            <CardMedia component="img" image={p} alt={`Photo ${i + 1}`} />
+                          <Card
+                            sx={{ cursor: "pointer", borderRadius: 2, overflow: "hidden" }}
+                            onClick={() => openLightbox(p)}
+                          >
+                            <CardMedia
+                              component="img"
+                              image={p}
+                              alt={`Photo ${i + 1}`}
+                              sx={{ width: "100%", height: 150, objectFit: "cover" }}
+                            />
                           </Card>
                         </Grid>
                       ))}
@@ -207,6 +245,36 @@ const BookDescription = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Lightbox Modal */}
+      <Modal open={lightboxOpen} onClose={closeLightbox}>
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            maxWidth: "90%",
+            maxHeight: "90%",
+            outline: "none",
+          }}
+        >
+          <Card sx={{ position: "relative" }}>
+            <IconButton
+              sx={{ position: "absolute", top: 8, right: 8, color: "white", zIndex: 1 }}
+              onClick={closeLightbox}
+            >
+              <CloseIcon />
+            </IconButton>
+            <CardMedia
+              component="img"
+              src={lightboxImage}
+              alt="Book"
+              sx={{ width: "100%", maxHeight: "90vh", objectFit: "contain" }}
+            />
+          </Card>
+        </Box>
+      </Modal>
     </Box>
   );
 };

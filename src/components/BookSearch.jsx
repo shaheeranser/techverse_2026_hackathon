@@ -6,7 +6,6 @@ import {
   InputAdornment,
   Menu,
   MenuItem,
-  Button,
   Chip,
   Stack,
   Typography,
@@ -24,12 +23,10 @@ import CloseIcon from "@mui/icons-material/Close";
 import TuneIcon from "@mui/icons-material/Tune";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 
-const BookSearch = ({ onSearch, onFilterChange }) => {
+const BookSearch = ({ onFilterChange }) => {
   const [query, setQuery] = useState("");
-  const [anchorEl, setAnchorEl] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  
-  // Filter states
+
   const [filters, setFilters] = useState({
     condition: [],
     pointRange: [0, 500],
@@ -38,44 +35,55 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
     sortBy: "newest",
   });
 
+  const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
-  const handleSearch = () => {
-    if (onSearch) onSearch(query, filters);
+  // Trigger search callback
+  const triggerChange = (updatedFilters = filters, q = query) => {
+    if (onFilterChange) onFilterChange(q, updatedFilters);
   };
 
-  const handleFilterClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleFilterClose = () => {
-    setAnchorEl(null);
+  const handleQueryChange = (e) => {
+    const val = e.target.value;
+    setQuery(val);
+    triggerChange(filters, val); // 🔥 live search on every keystroke
   };
 
   const handleConditionToggle = (condition) => {
     const newConditions = filters.condition.includes(condition)
       ? filters.condition.filter((c) => c !== condition)
       : [...filters.condition, condition];
-    
     const newFilters = { ...filters, condition: newConditions };
     setFilters(newFilters);
-    if (onFilterChange) onFilterChange(newFilters);
+    triggerChange(newFilters);
   };
 
   const handlePointRangeChange = (event, newValue) => {
     const newFilters = { ...filters, pointRange: newValue };
     setFilters(newFilters);
-  };
-
-  const handlePointRangeCommitted = (event, newValue) => {
-    if (onFilterChange) onFilterChange(filters);
+    triggerChange(newFilters); // 🔥 live update
   };
 
   const handleSortChange = (sortBy) => {
     const newFilters = { ...filters, sortBy };
     setFilters(newFilters);
-    if (onFilterChange) onFilterChange(newFilters);
+    triggerChange(newFilters);
     setAnchorEl(null);
+  };
+
+  const handleLocationChange = (e) => {
+    const newFilters = { ...filters, location: e.target.value };
+    setFilters(newFilters);
+    triggerChange(newFilters);
+  };
+
+  const handleAvailabilityToggle = () => {
+    const newFilters = {
+      ...filters,
+      availability: filters.availability === "all" ? "available" : "all",
+    };
+    setFilters(newFilters);
+    triggerChange(newFilters);
   };
 
   const clearFilters = () => {
@@ -87,12 +95,13 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
       sortBy: "newest",
     };
     setFilters(resetFilters);
-    if (onFilterChange) onFilterChange(resetFilters);
+    setQuery("");
+    triggerChange(resetFilters, ""); // 🔥 reset search results
   };
 
-  const activeFilterCount = 
-    filters.condition.length + 
-    (filters.availability !== "all" ? 1 : 0) + 
+  const activeFilterCount =
+    filters.condition.length +
+    (filters.availability !== "all" ? 1 : 0) +
     (filters.location ? 1 : 0);
 
   return (
@@ -111,14 +120,12 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
           boxShadow: 2,
         }}
       >
-        {/* Search Input */}
         <TextField
           fullWidth
           variant="standard"
           placeholder="Search by title, author, ISBN..."
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          onChange={handleQueryChange}
           InputProps={{
             disableUnderline: true,
             startAdornment: (
@@ -127,12 +134,9 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
               </InputAdornment>
             ),
           }}
-          sx={{
-            input: { px: 1, fontSize: "1rem" },
-          }}
+          sx={{ input: { px: 1, fontSize: "1rem" } }}
         />
 
-        {/* Advanced Filters Toggle */}
         <IconButton
           onClick={() => setShowAdvanced(!showAdvanced)}
           color={showAdvanced ? "primary" : "default"}
@@ -141,9 +145,8 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
           <TuneIcon />
         </IconButton>
 
-        {/* Sort Menu */}
         <IconButton
-          onClick={handleFilterClick}
+          onClick={(e) => setAnchorEl(e.currentTarget)}
           color={activeFilterCount > 0 ? "primary" : "default"}
           sx={{ p: 1, position: "relative" }}
         >
@@ -169,27 +172,25 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
             </Box>
           )}
         </IconButton>
-
-        {/* Search Button */}
-        <Button
-          variant="contained"
-          onClick={handleSearch}
-          sx={{ px: 3, py: 1, borderRadius: 2 }}
-        >
-          Search
-        </Button>
       </Box>
 
       {/* Advanced Filters Panel */}
       <Collapse in={showAdvanced}>
         <Paper sx={{ mt: 2, p: 3, borderRadius: 3 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
             <Typography variant="h6" fontWeight="medium">
               Advanced Filters
             </Typography>
-            <Button size="small" onClick={clearFilters} startIcon={<CloseIcon />}>
-              Clear All
-            </Button>
+            <IconButton onClick={clearFilters}>
+              <CloseIcon />
+            </IconButton>
           </Box>
 
           <Stack spacing={3}>
@@ -199,13 +200,21 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
                 Condition
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                {["Mint", "Good", "Fair", "Poor"].map((condition) => (
+                {["Mint", "Good", "Fair", "Poor"].map((cond) => (
                   <Chip
-                    key={condition}
-                    label={condition}
-                    onClick={() => handleConditionToggle(condition.toLowerCase())}
-                    color={filters.condition.includes(condition.toLowerCase()) ? "primary" : "default"}
-                    variant={filters.condition.includes(condition.toLowerCase()) ? "filled" : "outlined"}
+                    key={cond}
+                    label={cond}
+                    onClick={() => handleConditionToggle(cond.toLowerCase())}
+                    color={
+                      filters.condition.includes(cond.toLowerCase())
+                        ? "primary"
+                        : "default"
+                    }
+                    variant={
+                      filters.condition.includes(cond.toLowerCase())
+                        ? "filled"
+                        : "outlined"
+                    }
                   />
                 ))}
               </Stack>
@@ -221,11 +230,9 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
               <Slider
                 value={filters.pointRange}
                 onChange={handlePointRangeChange}
-                onChangeCommitted={handlePointRangeCommitted}
                 valueLabelDisplay="auto"
                 min={0}
                 max={500}
-                sx={{ mt: 2 }}
               />
             </Box>
 
@@ -241,10 +248,7 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
                 size="small"
                 placeholder="Enter city or area..."
                 value={filters.location}
-                onChange={(e) => {
-                  const newFilters = { ...filters, location: e.target.value };
-                  setFilters(newFilters);
-                }}
+                onChange={handleLocationChange}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -267,14 +271,7 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
                   control={
                     <Checkbox
                       checked={filters.availability === "available"}
-                      onChange={(e) => {
-                        const newFilters = {
-                          ...filters,
-                          availability: e.target.checked ? "available" : "all",
-                        };
-                        setFilters(newFilters);
-                        if (onFilterChange) onFilterChange(newFilters);
-                      }}
+                      onChange={handleAvailabilityToggle}
                     />
                   }
                   label="Only Available Books"
@@ -289,57 +286,35 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
       <Menu
         anchorEl={anchorEl}
         open={open}
-        onClose={handleFilterClose}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "right",
-        }}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        <MenuItem disabled>
-          <Typography variant="caption" color="text.secondary">
-            Sort By
-          </Typography>
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleSortChange("newest")}
-          selected={filters.sortBy === "newest"}
-        >
-          Newest First
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleSortChange("points-low")}
-          selected={filters.sortBy === "points-low"}
-        >
-          Points: Low to High
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleSortChange("points-high")}
-          selected={filters.sortBy === "points-high"}
-        >
-          Points: High to Low
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleSortChange("popular")}
-          selected={filters.sortBy === "popular"}
-        >
-          Most Popular
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleSortChange("rare")}
-          selected={filters.sortBy === "rare"}
-        >
-          Rarest Books
-        </MenuItem>
+        {[
+          { label: "Newest First", value: "newest" },
+          { label: "Points: Low to High", value: "points-low" },
+          { label: "Points: High to Low", value: "points-high" },
+          { label: "Most Popular", value: "popular" },
+          { label: "Rarest Books", value: "rare" },
+        ].map((item) => (
+          <MenuItem
+            key={item.value}
+            selected={filters.sortBy === item.value}
+            onClick={() => handleSortChange(item.value)}
+          >
+            {item.label}
+          </MenuItem>
+        ))}
       </Menu>
 
       {/* Active Filters Display */}
       {activeFilterCount > 0 && (
         <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ alignSelf: "center" }}
+          >
             Active filters:
           </Typography>
           {filters.condition.map((cond) => (
@@ -354,22 +329,14 @@ const BookSearch = ({ onSearch, onFilterChange }) => {
             <Chip
               label="Available only"
               size="small"
-              onDelete={() => {
-                const newFilters = { ...filters, availability: "all" };
-                setFilters(newFilters);
-                if (onFilterChange) onFilterChange(newFilters);
-              }}
+              onDelete={handleAvailabilityToggle}
             />
           )}
           {filters.location && (
             <Chip
               label={`Location: ${filters.location}`}
               size="small"
-              onDelete={() => {
-                const newFilters = { ...filters, location: "" };
-                setFilters(newFilters);
-                if (onFilterChange) onFilterChange(newFilters);
-              }}
+              onDelete={() => handleLocationChange({ target: { value: "" } })}
             />
           )}
         </Box>
